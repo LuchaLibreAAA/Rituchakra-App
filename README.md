@@ -34,6 +34,17 @@
 └─────────────────┴──────────────────┴─────────────────┴──────────────────────┘
 ```
 
+### 📋 Screen Capabilities Matrix
+
+| Screen | Route | Key Data Feeds | Visual Elements | Offline / Mock Support |
+| :--- | :--- | :--- | :--- | :---: |
+| **Home** | `app/(tabs)/index.tsx` | Sky temp, Rain prob, CAP Hazards, Mandi rates | SVG Bar Charts, Alert Cards, Commodity Grid | ✅ 100% |
+| **Analytics** | `app/(tabs)/analytics.tsx` | INSAT-IR1 radar nowcasting, Lightning, Hugli tides | 2×2 Matrix, 4-way Tile, Kalman Line Chart | ✅ 100% |
+| **Data** | `app/(tabs)/data.tsx` | 7-day GloFAS hydrology, FAO-56 $ET_0$, Soil moisture | 4 SVG Analytic Charts, Flood Badges, Summary Chips | ✅ 100% |
+| **Maps** | `app/(tabs)/maps.tsx` | Station telemetry, Regional radars, River basins | Stylized map canvas, District focus | ✅ 100% |
+| **Advisor** | `app/(tabs)/chat.tsx` | Multi-agent agro LLM, Official scientific sources | Speech bubbles, Fast presets, Lang Switcher | ✅ 100% |
+
+
 ### 📱 1. 🏠 Home & Dashboard (`/`)
 * **Real-time Sky Conditions**: Live temperature, night lows, visibility, and precipitation tracking.
 * **Hourly Precipitation Bar Charts**: Interactive SVG visualization of expected rain across the next 6–8 hours.
