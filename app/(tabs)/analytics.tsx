@@ -1,128 +1,212 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { View, Text, ScrollView, Dimensions, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAnalytics } from '../../src/api/client';
-import { MockBanner } from '../../src/components/MockBanner';
-import Svg, { Line, Polyline, Rect, Text as SvgText, G } from 'react-native-svg';
+import { useNowcastLive } from '../../src/api/client';
+import Svg, { Line, Polyline, Rect, Text as SvgText, Circle, G } from 'react-native-svg';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// ── Kalman Line Chart ──
-function KalmanChart({ data }: { data: { time: string; rate: number }[] }) {
-  const chartW = SCREEN_W - 64;
-  const chartH = 140;
-  const maxRate = Math.max(...data.map(d => d.rate), 0.01);
-  const step = chartW / (data.length - 1);
-
-  const points = data
-    .map((d, i) => `${i * step},${chartH - (d.rate / maxRate) * chartH}`)
-    .join(' ');
-
+// ---------------------------------------------------------------------------
+// Observed + Forecast rain bar chart
+// ---------------------------------------------------------------------------
+function RainTimeline({ observed, knots }: { observed: any[]; knots: any[] }) {
+  const all = [
+    ...observed.map(o => ({ t: o.t, mm: o.mm, type: 'obs' })),
+    ...knots.map(k => ({ t: k.t, mm: k.mm, type: 'fcst' })),
+  ];
+  const chartW = SCREEN_W - 48;
+  const chartH = 100;
+  const maxMm = Math.max(...all.map(d => d.mm), 1);
+  const barW = Math.max((chartW - all.length * 2) / all.length, 4);
   return (
     <Svg width={chartW} height={chartH + 24} style={{ alignSelf: 'center' }}>
-      {/* Grid lines */}
-      {[0, 0.25, 0.5, 0.75, 1].map((frac, i) => (
+      {all.map((d, i) => {
+        const barH = Math.max((d.mm / maxMm) * chartH, 1);
+        const x = i * (barW + 2) + 2;
+        const hour = d.t.split('T')[1]?.slice(0, 5) || '';
+        return (
+          <G key={i}>
+            <Rect x={x} y={chartH - barH} width={barW} height={barH}
+              fill={d.type === 'obs' ? '#3b82f6' : '#93c5fd'} rx={2} />
+            {i % 4 === 0 && (
+              <SvgText x={x + barW / 2} y={chartH + 14} fontSize={7} fill="#94a3b8" textAnchor="middle">
+                {hour}
+              </SvgText>
+            )}
+          </G>
+        );
+      })}
+      <Line x1={0} y1={chartH} x2={chartW} y2={chartH} stroke="#cbd5e1" strokeWidth={1} />
+    </Svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Kalman scene history chart
+// ---------------------------------------------------------------------------
+function KalmanChart({ scenes }: { scenes: any[] }) {
+  if (!scenes || scenes.length < 2) return null;
+  const chartW = SCREEN_W - 48;
+  const chartH = 120;
+  const maxVal = Math.max(...scenes.map(s => Math.max(s.obs, s.pred)), 1);
+  const obsPoints = scenes.map((s, i) => `${(i / (scenes.length - 1)) * chartW},${chartH - (s.obs / maxVal) * (chartH - 20)}`).join(' ');
+  const predPoints = scenes.map((s, i) => `${(i / (scenes.length - 1)) * chartW},${chartH - (s.pred / maxVal) * (chartH - 20)}`).join(' ');
+  return (
+    <Svg width={chartW} height={chartH + 24} style={{ alignSelf: 'center' }}>
+      {[0, 0.5, 1].map((frac, i) => (
         <G key={i}>
-          <Line x1={0} y1={chartH * (1 - frac)} x2={chartW} y2={chartH * (1 - frac)} stroke="#e2e8f0" strokeWidth={1} />
-          <SvgText x={0} y={chartH * (1 - frac) - 2} fontSize={8} fill="#94a3b8">
-            {(maxRate * frac).toFixed(2)}
+          <Line x1={0} y1={chartH * (1 - frac * 0.8) - 10} x2={chartW} y2={chartH * (1 - frac * 0.8) - 10} stroke="#f1f5f9" strokeWidth={1} />
+          <SvgText x={0} y={chartH * (1 - frac * 0.8) - 14} fontSize={8} fill="#94a3b8">
+            {(maxVal * frac).toFixed(1)}
           </SvgText>
         </G>
       ))}
-      <Polyline points={points} fill="none" stroke="#2563eb" strokeWidth={1.5} />
-      {/* X labels */}
-      {[0, Math.floor(data.length * 0.25), Math.floor(data.length * 0.5), Math.floor(data.length * 0.75), data.length - 1].map((idx, i) => (
-        <SvgText key={i} x={idx * step} y={chartH + 14} fontSize={8} fill="#94a3b8" textAnchor="middle">
-          {data[idx]?.time?.slice(0, 8) || ''}
-        </SvgText>
+      <Polyline points={predPoints} fill="none" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4,3" />
+      <Polyline points={obsPoints} fill="none" stroke="#3b82f6" strokeWidth={2} />
+      {scenes.map((s, i) => (
+        <Circle key={i} cx={(i / (scenes.length - 1)) * chartW} cy={chartH - (s.obs / maxVal) * (chartH - 20)} r={3} fill="#3b82f6" />
       ))}
     </Svg>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Convective severity pill
+// ---------------------------------------------------------------------------
+function ConvPill({ label, level, score }: { label: string; level: string; score: number }) {
+  const bg = level === 'quiet' ? '#f0fdf4' : level === 'watch' ? '#fefce8' : '#fef2f2';
+  const fg = level === 'quiet' ? '#16a34a' : level === 'watch' ? '#ca8a04' : '#dc2626';
+  return (
+    <View style={[cs.pill, { backgroundColor: bg }]}>
+      <Text style={[cs.pillLabel, { color: fg }]}>{label}</Text>
+      <Text style={[cs.pillValue, { color: fg }]}>{level.toUpperCase()}</Text>
+      <Text style={cs.pillScore}>{score}%</Text>
+    </View>
+  );
+}
+
 export default function AnalyticsScreen() {
-  const { data } = useAnalytics();
+  const { data, isLoading, error } = useNowcastLive();
 
-  if (!data) return <View style={s.center}><Text>Loading...</Text></View>;
+  if (isLoading) {
+    return <View style={cs.center}><ActivityIndicator size="large" color="#3b82f6" /><Text style={cs.loadTxt}>Loading nowcast…</Text></View>;
+  }
+  if (error || !data) {
+    return <View style={cs.center}><Text style={cs.errTxt}>Failed to load nowcast data</Text></View>;
+  }
 
-  // Separate metrics into grid groups
-  const gridA = data.metrics.slice(0, 4);   // Lightning, Cloudburst, Downburst, Cell Rain
-  const gridB = data.metrics.slice(4, 8);   // To Onset, Hugli Tide, Ponding, This Minute
-  const gridC = data.metrics.slice(8);      // Pump Set, Field, Storm Watch
+  const playhead = data.playhead;
+  const locked = data.locked;
+  const sat = data.sat;
+  const conv = data.convective || locked?.convective;
+  const observed = data.observed || [];
+  const knots = data.knots || [];
+
+  const onsetMin = playhead?.seconds_to_onset != null ? Math.floor(playhead.seconds_to_onset / 60) : null;
 
   return (
-    <SafeAreaView style={s.safe}>
-      <MockBanner />
-      <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={cs.safe}>
+      <ScrollView style={cs.scroll} contentContainerStyle={cs.scrollC} showsVerticalScrollIndicator={false}>
 
-        {/* Header */}
-        <View style={s.headerRow}>
-          <Text style={s.headerTitle}>Rituchakra</Text>
-          <View>
-            <Text style={s.headerLoc}>📍 Haldia, West Bengal</Text>
-            <Text style={s.headerTime}>07:49 pm</Text>
+        {/* ── Playhead Status ── */}
+        <View style={cs.playCard}>
+          <Text style={cs.playTitle}>Live Nowcast Playhead</Text>
+          <View style={cs.playRow}>
+            <View style={cs.playItem}>
+              <Text style={cs.playLabel}>TO ONSET</Text>
+              <Text style={cs.playValue}>{onsetMin != null ? `${Math.floor(onsetMin / 60)}h ${onsetMin % 60}m` : 'N/A'}</Text>
+            </View>
+            <View style={cs.playItem}>
+              <Text style={cs.playLabel}>TIDE</Text>
+              <Text style={cs.playValue}>{playhead?.tide_m?.toFixed(2) ?? '--'} m</Text>
+            </View>
+            <View style={cs.playItem}>
+              <Text style={cs.playLabel}>PUMP</Text>
+              <Text style={[cs.playValue, { color: playhead?.pump === 'ok' ? '#16a34a' : '#dc2626' }]}>
+                {playhead?.pump?.toUpperCase() ?? '--'}
+              </Text>
+            </View>
+            <View style={cs.playItem}>
+              <Text style={cs.playLabel}>FIELD</Text>
+              <Text style={[cs.playValue, { color: playhead?.enterable ? '#16a34a' : '#dc2626' }]}>
+                {playhead?.enterable ? 'OPEN' : 'CLOSED'}
+              </Text>
+            </View>
+          </View>
+          <View style={cs.playRow}>
+            <View style={cs.playItem}>
+              <Text style={cs.playLabel}>PONDING</Text>
+              <Text style={cs.playValue}>{playhead?.pond_mm?.toFixed(1) ?? '0'} mm</Text>
+            </View>
+            <View style={cs.playItem}>
+              <Text style={cs.playLabel}>GAP RATE</Text>
+              <Text style={cs.playValue}>{playhead?.gap_mm_h?.toFixed(2) ?? '0'} mm/h</Text>
+            </View>
+            <View style={cs.playItem}>
+              <Text style={cs.playLabel}>REGIME</Text>
+              <Text style={cs.playValue}>{locked?.regime?.toUpperCase() ?? '--'}</Text>
+            </View>
+            <View style={cs.playItem}>
+              <Text style={cs.playLabel}>KAL LEVEL</Text>
+              <Text style={cs.playValue}>{locked?.kal_level?.toUpperCase() ?? '--'}</Text>
+            </View>
           </View>
         </View>
 
-        <Text style={s.sectionTitle}>LIVE STORM</Text>
-
-        {/* Grid A - 2x2 big cards */}
-        <View style={s.grid2}>
-          {gridA.map(m => (
-            <View key={m.id} style={s.metricCard}>
-              <Text style={s.metricLabel}>{m.label}</Text>
-              <Text style={s.metricValue}>{m.value}</Text>
-              {m.subValue && <Text style={s.metricSub}>{m.subValue}</Text>}
-            </View>
-          ))}
-        </View>
-
-        {/* Grid B - 4 across */}
-        <View style={s.grid4}>
-          {gridB.map(m => (
-            <View key={m.id} style={s.metricCardSm}>
-              <Text style={s.metricLabelSm}>{m.label}</Text>
-              <Text style={s.metricValueSm}>{m.value}</Text>
-              {m.subValue && <Text style={s.metricSubSm}>{m.subValue}</Text>}
-            </View>
-          ))}
-        </View>
-
-        {/* Grid C - 3 across */}
-        <View style={s.grid3}>
-          {gridC.map(m => (
-            <View key={m.id} style={s.metricCardMd}>
-              <Text style={s.metricLabelSm}>{m.label}</Text>
-              <Text style={s.metricValueMd}>{m.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Kalman Chart */}
-        <View style={s.chartCard}>
-          <View style={s.chartHeader}>
-            <Text style={s.chartTitle}>BETWEEN-SCENE KALMAN</Text>
-          </View>
-          <View style={s.kalmanStats}>
-            <View style={s.kalmanStat}>
-              <Text style={s.kalmanLabel}>LIVE RATE</Text>
-              <Text style={s.kalmanVal}>{data.kalman.liveRate} <Text style={s.kalmanUnit}>mm/h</Text></Text>
-            </View>
-            <View style={s.kalmanStat}>
-              <Text style={s.kalmanLabel}>LAST ERROR</Text>
-              <Text style={s.kalmanVal}>{data.kalman.lastError} <Text style={s.kalmanUnit}>mm/h</Text></Text>
-            </View>
-            <View style={s.kalmanStat}>
-              <Text style={s.kalmanLabel}>UPDATES</Text>
-              <Text style={s.kalmanVal}>{data.kalman.updates}</Text>
-            </View>
-            <View style={s.kalmanStat}>
-              <Text style={s.kalmanLabel}>NEXT SCENE</Text>
-              <Text style={s.kalmanVal}>{data.kalman.nextScene}</Text>
+        {/* ── Convective Threats ── */}
+        {conv && (
+          <View style={cs.section}>
+            <Text style={cs.secTitle}>⚡ Convective Threats</Text>
+            <View style={cs.pillRow}>
+              <ConvPill label="LIGHTNING" level={conv.lightning.level} score={conv.lightning.score_pct} />
+              <ConvPill label="CLOUDBURST" level={conv.cloudburst.level} score={conv.cloudburst.score_pct} />
+              <ConvPill label="DOWNBURST" level={conv.downburst.level} score={conv.downburst.score_pct} />
             </View>
           </View>
-          <KalmanChart data={data.kalman.data} />
+        )}
+
+        {/* ── Rain Timeline ── */}
+        <View style={cs.section}>
+          <Text style={cs.secTitle}>🌧️ Observed + Forecast Rain</Text>
+          <View style={cs.legendRow}>
+            <View style={cs.legendItem}><View style={[cs.legendDot, { backgroundColor: '#3b82f6' }]} /><Text style={cs.legendTxt}>Observed</Text></View>
+            <View style={cs.legendItem}><View style={[cs.legendDot, { backgroundColor: '#93c5fd' }]} /><Text style={cs.legendTxt}>Nowcast</Text></View>
+          </View>
+          <RainTimeline observed={observed} knots={knots} />
         </View>
+
+        {/* ── Kalman Filter ── */}
+        {sat?.history?.scenes && sat.history.scenes.length > 0 && (
+          <View style={cs.section}>
+            <Text style={cs.secTitle}>🔬 Kalman Filter (Sat)</Text>
+            <View style={cs.kalStats}>
+              <Text style={cs.kalStat}>Rate: {sat.playhead_rate?.toFixed(2)} mm/h</Text>
+              <Text style={cs.kalStat}>Error: {sat.last_error_mm_h?.toFixed(2)} mm/h</Text>
+              <Text style={cs.kalStat}>Updates: {sat.n_updates}</Text>
+              <Text style={cs.kalStat}>MAE: {sat.history.mae?.toFixed(2)}</Text>
+            </View>
+            <View style={cs.legendRow}>
+              <View style={cs.legendItem}><View style={[cs.legendDot, { backgroundColor: '#3b82f6' }]} /><Text style={cs.legendTxt}>Observed</Text></View>
+              <View style={cs.legendItem}><View style={[cs.legendDot, { backgroundColor: '#f59e0b' }]} /><Text style={cs.legendTxt}>Predicted</Text></View>
+            </View>
+            <KalmanChart scenes={sat.history.scenes} />
+          </View>
+        )}
+
+        {/* ── Locked Hours ── */}
+        {locked?.hours && locked.hours.length > 0 && (
+          <View style={cs.section}>
+            <Text style={cs.secTitle}>🔒 Locked Forecast Hours</Text>
+            {locked.hours.map((h, i) => (
+              <View key={i} style={cs.lockedRow}>
+                <Text style={cs.lockedTime}>{h.t.split('T')[1]?.slice(0, 5) || h.t}</Text>
+                <Text style={cs.lockedMm}>{h.mm.toFixed(2)} mm</Text>
+                <Text style={cs.lockedPwet}>P(wet): {(h.p_wet * 100).toFixed(0)}%</Text>
+                <Text style={cs.lockedLead}>+{h.lead_h}h</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -130,46 +214,41 @@ export default function AnalyticsScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const cs = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f8fafc' },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 8 },
+  scrollC: { padding: 16 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
-
-  // Header
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: '#1e293b' },
-  headerLoc: { fontSize: 12, color: '#0369a1', textAlign: 'right' },
-  headerTime: { fontSize: 11, color: '#64748b', textAlign: 'right' },
-
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1e293b', marginBottom: 10, letterSpacing: 1 },
-
-  // 2x2 grid
-  grid2: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
-  metricCard: { width: (SCREEN_W - 42) / 2, backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#e2e8f0' },
-  metricLabel: { fontSize: 11, fontWeight: '600', color: '#475569', letterSpacing: 0.5, marginBottom: 4 },
-  metricValue: { fontSize: 24, fontWeight: '700', color: '#1e293b' },
-  metricSub: { fontSize: 11, color: '#64748b', marginTop: 2 },
-
-  // 4-across grid
-  grid4: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  metricCardSm: { flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#bae6fd', alignItems: 'center' },
-  metricLabelSm: { fontSize: 9, fontWeight: '600', color: '#475569', letterSpacing: 0.3, marginBottom: 2, textAlign: 'center' },
-  metricValueSm: { fontSize: 14, fontWeight: '700', color: '#1e293b', textAlign: 'center' },
-  metricSubSm: { fontSize: 8, color: '#64748b', textAlign: 'center' },
-
-  // 3-across grid
-  grid3: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  metricCardMd: { flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  metricValueMd: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
-
-  // Chart
-  chartCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#c4b5fd' },
-  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  chartTitle: { fontSize: 13, fontWeight: '700', color: '#1e293b', letterSpacing: 0.5 },
-  kalmanStats: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  kalmanStat: { alignItems: 'center' },
-  kalmanLabel: { fontSize: 9, fontWeight: '600', color: '#475569', letterSpacing: 0.3 },
-  kalmanVal: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
-  kalmanUnit: { fontSize: 11, fontWeight: '400', color: '#64748b' },
+  loadTxt: { marginTop: 12, color: '#64748b', fontSize: 14 },
+  errTxt: { color: '#ef4444', fontSize: 16 },
+  // Play card
+  playCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2 },
+  playTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  playRow: { flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
+  playItem: { backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, flex: 1, minWidth: 70 },
+  playLabel: { fontSize: 9, color: '#94a3b8', fontWeight: '700', letterSpacing: 0.5 },
+  playValue: { fontSize: 14, color: '#0f172a', fontWeight: '700', marginTop: 2 },
+  // Section
+  section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 1 },
+  secTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  // Pills
+  pillRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  pill: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, flex: 1, minWidth: 90, alignItems: 'center' },
+  pillLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
+  pillValue: { fontSize: 14, fontWeight: '700', marginTop: 2 },
+  pillScore: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
+  // Legend
+  legendRow: { flexDirection: 'row', gap: 16, marginBottom: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendTxt: { fontSize: 11, color: '#64748b' },
+  // Kalman stats
+  kalStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  kalStat: { backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, fontSize: 12, color: '#475569' },
+  // Locked
+  lockedRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  lockedTime: { fontSize: 13, color: '#334155', fontWeight: '600', width: 50 },
+  lockedMm: { fontSize: 13, color: '#3b82f6', fontWeight: '700' },
+  lockedPwet: { fontSize: 12, color: '#64748b' },
+  lockedLead: { fontSize: 12, color: '#94a3b8' },
 });

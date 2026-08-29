@@ -1,180 +1,153 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Dimensions } from 'react-native';
+import { View, Text, ScrollView, Dimensions, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Star } from 'lucide-react-native';
-import { useForecastData } from '../../src/api/client';
-import { mockForecastSummary } from '../../src/mocks/forecast.mock';
-import { MockBanner } from '../../src/components/MockBanner';
+import { useForecastData, useRisks } from '../../src/api/client';
 import Svg, { Rect, Line, Polyline, Circle, Text as SvgText, G } from 'react-native-svg';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// ── Rain / ET0 combo chart ──
-function RainEt0Chart({ data }: { data: { date?: string; rain?: number; et0?: number }[] }) {
-  const W = (SCREEN_W - 64) / 2;
-  const H = 120;
-  const maxVal = Math.max(...data.map(d => Math.max(d.rain || 0, d.et0 || 0)), 1);
-  const barW = (W - 20) / data.length - 4;
-
+// ---------------------------------------------------------------------------
+// Discharge Chart (river discharge 7-day)
+// ---------------------------------------------------------------------------
+function DischargeChart({ data }: { data: number[] }) {
+  const chartW = SCREEN_W - 48;
+  const H = 80;
+  const maxD = Math.max(...data, 1);
+  const points = data.map((d, i) => `${(i / (data.length - 1)) * chartW},${H - (d / maxD) * (H - 10)}`).join(' ');
   return (
-    <Svg width={W} height={H + 30}>
-      <SvgText x={4} y={12} fontSize={10} fill="#1e293b" fontWeight="bold">RAIN / ET₀</SvgText>
-      {data.map((d, i) => {
-        const x = i * (barW + 4) + 10;
-        const rainH = ((d.rain || 0) / maxVal) * (H - 20);
-        const et0H = ((d.et0 || 0) / maxVal) * (H - 20);
-        return (
-          <G key={i}>
-            <Rect x={x} y={H - rainH} width={barW / 2} height={rainH} fill="#3b82f6" rx={1} />
-            <Rect x={x + barW / 2} y={H - et0H} width={barW / 2} height={et0H} fill="#7c3aed" rx={1} />
-            <SvgText x={x + barW / 2} y={H + 12} fontSize={7} fill="#94a3b8" textAnchor="middle">
-              {d.date?.slice(5) || ''}
-            </SvgText>
-          </G>
-        );
-      })}
-    </Svg>
-  );
-}
-
-// ── Temperature Line Chart ──
-function TempChart({ data }: { data: { date?: string; maxTemp: number; minTemp?: number }[] }) {
-  const W = (SCREEN_W - 64) / 2;
-  const H = 120;
-  const allTemps = data.flatMap(d => [d.maxTemp, d.minTemp || d.maxTemp - 3]);
-  const minT = Math.min(...allTemps) - 2;
-  const maxT = Math.max(...allTemps) + 2;
-  const step = (W - 20) / (data.length - 1);
-
-  const maxLine = data.map((d, i) => `${i * step + 10},${H - 20 - ((d.maxTemp - minT) / (maxT - minT)) * (H - 30)}`).join(' ');
-  const minLine = data.map((d, i) => `${i * step + 10},${H - 20 - (((d.minTemp || d.maxTemp - 3) - minT) / (maxT - minT)) * (H - 30)}`).join(' ');
-
-  return (
-    <Svg width={W} height={H + 30}>
-      <SvgText x={4} y={12} fontSize={10} fill="#1e293b" fontWeight="bold">°C</SvgText>
-      <Polyline points={maxLine} fill="none" stroke="#f59e0b" strokeWidth={2} />
-      <Polyline points={minLine} fill="none" stroke="#3b82f6" strokeWidth={2} />
+    <Svg width={chartW} height={H + 20} style={{ alignSelf: 'center' }}>
+      <Line x1={0} y1={H} x2={chartW} y2={H} stroke="#e2e8f0" strokeWidth={1} />
+      <Polyline points={points} fill="none" stroke="#3b82f6" strokeWidth={2} />
       {data.map((d, i) => (
-        <SvgText key={i} x={i * step + 10} y={H + 12} fontSize={7} fill="#94a3b8" textAnchor="middle">
-          {d.date?.slice(5) || ''}
-        </SvgText>
+        <G key={i}>
+          <Circle cx={(i / (data.length - 1)) * chartW} cy={H - (d / maxD) * (H - 10)} r={3} fill="#3b82f6" />
+          <SvgText x={(i / (data.length - 1)) * chartW} y={H + 14} fontSize={8} fill="#94a3b8" textAnchor="middle">
+            {`d+${i}`}
+          </SvgText>
+        </G>
       ))}
-    </Svg>
-  );
-}
-
-// ── Soil + Probability Chart ──
-function SoilChart({ data }: { data: { soil?: number; prob?: number }[] }) {
-  const W = (SCREEN_W - 64) / 2;
-  const H = 120;
-  const step = (W - 20) / (data.length - 1);
-
-  const soilLine = data.map((d, i) => `${i * step + 10},${H - 20 - ((d.soil || 0) / 1) * (H - 30)}`).join(' ');
-  const probLine = data.map((d, i) => `${i * step + 10},${H - 20 - ((d.prob || 0) / 100) * (H - 30)}`).join(' ');
-
-  return (
-    <Svg width={W} height={H + 30}>
-      <SvgText x={4} y={12} fontSize={10} fill="#1e293b" fontWeight="bold">SOIL + PROBABILITY</SvgText>
-      <Polyline points={soilLine} fill="none" stroke="#1e293b" strokeWidth={2} />
-      {data.map((d, i) => (
-        <Circle key={i} cx={i * step + 10} cy={H - 20 - ((d.soil || 0) / 1) * (H - 30)} r={3} fill="#1e293b" />
-      ))}
-      <Polyline points={probLine} fill="none" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4,2" />
-    </Svg>
-  );
-}
-
-// ── Hourly Rain Bar Chart ──
-function HourlyChart({ data }: { data: { rain?: number; date?: string }[] }) {
-  const W = (SCREEN_W - 64) / 2;
-  const H = 120;
-  const maxRain = Math.max(...data.map(d => d.rain || 0), 0.1);
-  const barW = (W - 20) / data.length - 2;
-
-  return (
-    <Svg width={W} height={H + 30}>
-      <SvgText x={4} y={12} fontSize={10} fill="#1e293b" fontWeight="bold">HOURLY</SvgText>
-      {data.map((d, i) => {
-        const barH = ((d.rain || 0) / maxRain) * (H - 20);
-        const x = i * (barW + 2) + 10;
-        return (
-          <G key={i}>
-            <Rect x={x} y={H - barH} width={barW} height={barH} fill="#3b82f6" rx={1} />
-            <SvgText x={x + barW / 2} y={H + 12} fontSize={7} fill="#94a3b8" textAnchor="middle">
-              {d.date?.slice(5) || ''}
-            </SvgText>
-          </G>
-        );
-      })}
     </Svg>
   );
 }
 
 export default function DataScreen() {
-  const { data } = useForecastData();
+  const { data: forecast, isLoading, error } = useForecastData();
+  const { data: risksData } = useRisks();
 
-  if (!data || data.length === 0) return <View style={s.center}><Text>Loading...</Text></View>;
+  if (isLoading) {
+    return <View style={ds.center}><ActivityIndicator size="large" color="#3b82f6" /><Text style={ds.loadTxt}>Loading forecast…</Text></View>;
+  }
+  if (error || !forecast) {
+    return <View style={ds.center}><Text style={ds.errTxt}>Failed to load forecast</Text></View>;
+  }
 
-  const summary = mockForecastSummary;
+  const predictive = forecast.predictive;
+  const current = forecast.descriptive?.current;
+  const precip = forecast.descriptive?.series?.precip_hourly || [];
+  const discharge = forecast.descriptive?.series?.discharge_daily || [];
+  const outlook = predictive?.outlook_days || [];
+  const risks = risksData?.risks || [];
 
   return (
-    <SafeAreaView style={s.safe}>
-      <MockBanner />
-      <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={ds.safe}>
+      <ScrollView style={ds.scroll} contentContainerStyle={ds.scrollC} showsVerticalScrollIndicator={false}>
 
-        {/* Search Bar */}
-        <View style={s.searchBar}>
-          <Search color="#94a3b8" size={18} />
-          <TextInput style={s.searchInput} placeholder="Search city, town or district..." placeholderTextColor="#94a3b8" />
-        </View>
-        <View style={s.locationRow}>
-          <Text style={s.locationText}>📍 Haldia, West Bengal</Text>
-          <Star color="#f59e0b" size={16} fill="#f59e0b" />
-        </View>
-
-        {/* Summary Badges */}
-        <Text style={s.sectionTitle}>Forecast</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.badges}>
-          <View style={s.badge}><Text style={s.badgeText}>RAIN 7D: {summary.rain7d} MM</Text></View>
-          <View style={s.badge}><Text style={s.badgeText}>WATER BALANCE: {summary.waterBalance} MM</Text></View>
-          <View style={s.badge}><Text style={s.badgeText}>IRRIGATE: {summary.irrigate}</Text></View>
-          <View style={s.badge}><Text style={s.badgeText}>FLOOD DAYS: {summary.floodDays}</Text></View>
-        </ScrollView>
-
-        {/* Forecast Table */}
-        <View style={s.tableCard}>
-          <View style={s.tableHeader}>
-            <Text style={[s.th, { flex: 0.9 }]}>Date</Text>
-            <Text style={[s.th, { flex: 0.7 }]}>Rain (mm)</Text>
-            <Text style={[s.th, { flex: 0.6 }]}>Prob. (%)</Text>
-            <Text style={[s.th, { flex: 0.7 }]}>Tmax (°C)</Text>
-            <Text style={[s.th, { flex: 0.6 }]}>ET₀ (mm)</Text>
-            <Text style={[s.th, { flex: 0.7 }]}>Soil (m³/m³)</Text>
-            <Text style={[s.th, { flex: 0.6 }]}>WB (mm)</Text>
+        {/* ── Summary Chips ── */}
+        <View style={ds.section}>
+          <Text style={ds.secTitle}>📊 Forecast Summary</Text>
+          <View style={ds.chipRow}>
+            <View style={ds.chip}><Text style={ds.chipLabel}>Rain 7d</Text><Text style={ds.chipVal}>{predictive?.precip_7d_mm?.toFixed(1) ?? '--'} mm</Text></View>
+            <View style={ds.chip}><Text style={ds.chipLabel}>Water Balance</Text><Text style={ds.chipVal}>{predictive?.water_balance_7d_mm?.toFixed(1) ?? '--'} mm</Text></View>
+            <View style={ds.chip}><Text style={ds.chipLabel}>ET₀ 7d</Text><Text style={ds.chipVal}>{predictive?.et0_7d_mm?.toFixed(1) ?? '--'} mm</Text></View>
           </View>
-          {data.map((d, i) => (
-            <View key={i} style={[s.tableRow, d.alert ? s.tableRowAlert : null]}>
-              <Text style={[s.td, { flex: 0.9 }]}>{d.date}</Text>
-              <Text style={[s.td, { flex: 0.7 }]}>{d.rain} mm</Text>
-              <Text style={[s.td, { flex: 0.6 }]}>{d.prob}%</Text>
-              <Text style={[s.td, { flex: 0.7 }]}>{d.maxTemp} °C</Text>
-              <Text style={[s.td, { flex: 0.6 }]}>{d.et0} mm</Text>
-              <Text style={[s.td, { flex: 0.7 }]}>{d.soil}</Text>
-              <Text style={[s.td, { flex: 0.6 }]}>{d.wb} mm</Text>
-              {d.alert && <Text style={s.floodBadge}>{d.alert}</Text>}
+          <View style={ds.chipRow}>
+            <View style={[ds.chip, { backgroundColor: predictive?.flood_discharge_trend === 'rising' ? '#fef2f2' : '#f0fdf4' }]}>
+              <Text style={ds.chipLabel}>Discharge Trend</Text>
+              <Text style={[ds.chipVal, { color: predictive?.flood_discharge_trend === 'rising' ? '#dc2626' : '#16a34a' }]}>
+                {predictive?.flood_discharge_trend?.toUpperCase() || '--'}
+              </Text>
             </View>
-          ))}
+            {predictive?.irrigate_dates?.length === 0 && (
+              <View style={[ds.chip, { backgroundColor: '#f0fdf4' }]}>
+                <Text style={ds.chipLabel}>Irrigate</Text>
+                <Text style={[ds.chipVal, { color: '#16a34a' }]}>NOT NEEDED</Text>
+              </View>
+            )}
+          </View>
         </View>
 
-        {/* Charts 2x2 */}
-        <View style={s.chartRow}>
-          <View style={s.chartCard}><RainEt0Chart data={data} /></View>
-          <View style={s.chartCard}><TempChart data={data} /></View>
-        </View>
-        <View style={s.chartRow}>
-          <View style={s.chartCard}><SoilChart data={data} /></View>
-          <View style={s.chartCard}><HourlyChart data={data} /></View>
-        </View>
+        {/* ── Outlook Days Table ── */}
+        {outlook.length > 0 && (
+          <View style={ds.section}>
+            <Text style={ds.secTitle}>📅 7-Day Outlook</Text>
+            {/* Header */}
+            <View style={ds.tableRow}>
+              <Text style={[ds.tableH, { flex: 1.5 }]}>Date</Text>
+              <Text style={ds.tableH}>Rain</Text>
+              <Text style={ds.tableH}>Prob</Text>
+              <Text style={ds.tableH}>Max°C</Text>
+              <Text style={ds.tableH}>ET₀</Text>
+              <Text style={ds.tableH}>W.Bal</Text>
+            </View>
+            {outlook.map((day, i) => (
+              <View key={i} style={[ds.tableRow, day.flood_watch && { backgroundColor: '#fef2f2' }]}>
+                <Text style={[ds.tableCell, { flex: 1.5, fontWeight: '600' }]}>{day.date.slice(5)}</Text>
+                <Text style={ds.tableCell}>{day.precip_mm.toFixed(1)}</Text>
+                <Text style={ds.tableCell}>{day.precip_prob_pct}%</Text>
+                <Text style={ds.tableCell}>{day.temp_max_c.toFixed(1)}</Text>
+                <Text style={ds.tableCell}>{day.et0_mm.toFixed(1)}</Text>
+                <Text style={[ds.tableCell, { color: day.water_balance_mm > 10 ? '#dc2626' : '#334155' }]}>
+                  {day.water_balance_mm.toFixed(1)}
+                </Text>
+              </View>
+            ))}
+            {/* Badges */}
+            <View style={ds.badgeRow}>
+              {outlook.some(d => d.flood_watch) && (
+                <View style={[ds.badge, { backgroundColor: '#fef2f2' }]}><Text style={[ds.badgeTxt, { color: '#dc2626' }]}>🌊 FLOOD WATCH</Text></View>
+              )}
+              {outlook.every(d => !d.irrigate) && (
+                <View style={[ds.badge, { backgroundColor: '#f0fdf4' }]}><Text style={[ds.badgeTxt, { color: '#16a34a' }]}>💧 NO IRRIGATION</Text></View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* ── River Discharge Chart ── */}
+        {predictive?.river_discharge && predictive.river_discharge.length > 0 && (
+          <View style={ds.section}>
+            <Text style={ds.secTitle}>🌊 River Discharge (GloFAS)</Text>
+            <DischargeChart data={predictive.river_discharge} />
+          </View>
+        )}
+
+        {/* ── Risk Breakdown ── */}
+        {risks.length > 0 && (
+          <View style={ds.section}>
+            <Text style={ds.secTitle}>🛡️ Risk Factors</Text>
+            {risks.filter(r => r.score_pct > 5).map((risk, i) => (
+              <View key={risk.id || i} style={ds.riskCard}>
+                <View style={ds.riskHead}>
+                  <Text style={ds.riskLabel}>{risk.label}</Text>
+                  <Text style={[ds.riskScore, {
+                    color: risk.score_pct > 50 ? '#dc2626' : risk.score_pct > 25 ? '#f59e0b' : '#22c55e'
+                  }]}>{risk.score_pct}%</Text>
+                </View>
+                <View style={ds.riskBarBg}>
+                  <View style={[ds.riskBarFill, {
+                    width: `${Math.min(risk.score_pct, 100)}%`,
+                    backgroundColor: risk.score_pct > 50 ? '#dc2626' : risk.score_pct > 25 ? '#f59e0b' : '#22c55e',
+                  }]} />
+                </View>
+                <View style={ds.factorRow}>
+                  {risk.factors.filter(f => f.contribution_pct > 0).map((f, j) => (
+                    <Text key={j} style={ds.factorTxt}>{f.label}: {f.contribution_pct}%</Text>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -182,31 +155,33 @@ export default function DataScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const ds = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f8fafc' },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 8 },
+  scrollC: { padding: 16 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
-
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: '#1e293b' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  locationText: { fontSize: 14, fontWeight: '600', color: '#0369a1' },
-
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b', marginBottom: 8 },
-
-  badges: { marginBottom: 12, flexGrow: 0 },
-  badge: { backgroundColor: '#1e293b', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginRight: 8 },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-
-  tableCard: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  tableHeader: { flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: '#cbd5e1', paddingBottom: 6, marginBottom: 4 },
-  th: { fontSize: 9, fontWeight: '700', color: '#475569' },
-  tableRow: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', alignItems: 'center' },
-  tableRowAlert: { backgroundColor: '#fef2f2' },
-  td: { fontSize: 10, color: '#1e293b' },
-  floodBadge: { position: 'absolute', right: 0, backgroundColor: '#fecaca', color: '#991b1b', fontSize: 8, fontWeight: '700', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
-
-  chartRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  chartCard: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#e2e8f0' },
+  loadTxt: { marginTop: 12, color: '#64748b', fontSize: 14 },
+  errTxt: { color: '#ef4444', fontSize: 16 },
+  section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 1 },
+  secTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  chipRow: { flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
+  chip: { backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, flex: 1, minWidth: 90 },
+  chipLabel: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
+  chipVal: { fontSize: 15, color: '#0f172a', fontWeight: '700', marginTop: 2 },
+  // Table
+  tableRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  tableH: { flex: 1, fontSize: 10, color: '#94a3b8', fontWeight: '700' },
+  tableCell: { flex: 1, fontSize: 12, color: '#334155' },
+  badgeRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  badge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeTxt: { fontSize: 11, fontWeight: '700' },
+  // Risks
+  riskCard: { marginBottom: 12 },
+  riskHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  riskLabel: { fontSize: 14, fontWeight: '600', color: '#334155' },
+  riskScore: { fontSize: 16, fontWeight: '700' },
+  riskBarBg: { height: 6, backgroundColor: '#e2e8f0', borderRadius: 3, overflow: 'hidden', marginBottom: 4 },
+  riskBarFill: { height: '100%', borderRadius: 3 },
+  factorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  factorTxt: { fontSize: 10, color: '#64748b', backgroundColor: '#f8fafc', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
 });

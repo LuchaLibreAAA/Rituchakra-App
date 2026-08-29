@@ -1,37 +1,40 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, ScrollView, Dimensions, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Star, Search, CloudRain, Cloud, Droplets, Wind, AlertTriangle, Waves, Activity } from 'lucide-react-native';
-import { useDashboard, useMarketPrices } from '../../src/api/client';
-import { MockBanner } from '../../src/components/MockBanner';
+import { CloudRain, AlertTriangle, Droplets, Wind, Thermometer, Eye } from 'lucide-react-native';
+import { useDashboard, useAlerts, useMarket } from '../../src/api/client';
 import Svg, { Rect, Text as SvgText, Line, G } from 'react-native-svg';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// ── Simple Bar Chart using react-native-svg ──
-function HourlyBarChart({ data }: { data: { time: string; rain: number }[] }) {
-  const chartW = SCREEN_W - 64;
-  const chartH = 120;
-  const barW = chartW / data.length - 8;
-  const maxRain = Math.max(...data.map(d => d.rain), 0.1);
-
+// ---------------------------------------------------------------------------
+// Hourly Rain Bar Chart (from real precip_hourly series)
+// ---------------------------------------------------------------------------
+function HourlyRainChart({ data }: { data: Array<{ t: string; value: number }> }) {
+  const chartW = SCREEN_W - 48;
+  const chartH = 100;
+  const maxRain = Math.max(...data.map(d => d.value), 1);
+  const barW = Math.max((chartW - data.length * 2) / data.length, 6);
   return (
-    <Svg width={chartW} height={chartH + 30} style={{ alignSelf: 'center' }}>
+    <Svg width={chartW} height={chartH + 24} style={{ alignSelf: 'center' }}>
       {data.map((d, i) => {
-        const barH = (d.rain / maxRain) * chartH;
-        const x = i * (barW + 8) + 4;
+        const barH = Math.max((d.value / maxRain) * chartH, 1);
+        const x = i * (barW + 2) + 2;
         const y = chartH - barH;
+        const hour = d.t.split('T')[1]?.slice(0, 5) || '';
         return (
           <G key={i}>
-            <Rect x={x} y={y} width={barW} height={barH} fill="#93c5fd" rx={3} />
-            {d.rain > 0 && (
-              <SvgText x={x + barW / 2} y={y - 4} fontSize={10} fill="#475569" textAnchor="middle">
-                {String(d.rain)}
+            <Rect x={x} y={y} width={barW} height={barH} fill="#60a5fa" rx={3} />
+            {d.value > 0 && (
+              <SvgText x={x + barW / 2} y={y - 4} fontSize={8} fill="#475569" textAnchor="middle">
+                {String(d.value)}
               </SvgText>
             )}
-            <SvgText x={x + barW / 2} y={chartH + 14} fontSize={9} fill="#64748b" textAnchor="middle">
-              {d.time}
-            </SvgText>
+            {i % 3 === 0 && (
+              <SvgText x={x + barW / 2} y={chartH + 14} fontSize={7} fill="#64748b" textAnchor="middle">
+                {hour}
+              </SvgText>
+            )}
           </G>
         );
       })}
@@ -40,188 +43,228 @@ function HourlyBarChart({ data }: { data: { time: string; rain: number }[] }) {
   );
 }
 
-// ── Market Price Bar Chart ──
-function MarketBarChart({ data }: { data: { crop: string; price: number }[] }) {
-  const chartW = SCREEN_W - 64;
-  const chartH = 200;
-  const barH = 18;
-  const maxPrice = Math.max(...data.map(d => d.price));
-
-  return (
-    <Svg width={chartW} height={data.length * (barH + 6) + 30}>
-      <SvgText x={chartW / 2} y={14} fontSize={12} fill="#1e293b" textAnchor="middle" fontWeight="bold">Market</SvgText>
-      {data.map((d, i) => {
-        const w = (d.price / maxPrice) * (chartW - 140);
-        const y = i * (barH + 6) + 24;
-        const label = d.crop.split(' - ')[0].split('(')[0].trim();
-        return (
-          <G key={i}>
-            <SvgText x={0} y={y + 13} fontSize={9} fill="#475569">{label}</SvgText>
-            <Rect x={140} y={y} width={w} height={barH} fill="#38bdf8" rx={2} />
-          </G>
-        );
-      })}
-      {/* X axis labels */}
-      {[0, 2000, 4000, 6000].map((v, i) => (
-        <SvgText key={i} x={140 + (v / maxPrice) * (chartW - 140)} y={data.length * (barH + 6) + 38} fontSize={9} fill="#94a3b8" textAnchor="middle">
-          {String(v)}
-        </SvgText>
-      ))}
-    </Svg>
-  );
+// ---------------------------------------------------------------------------
+// Severity color mapping
+// ---------------------------------------------------------------------------
+function severityColor(sev: string): string {
+  switch (sev) {
+    case 'extreme': return '#dc2626';
+    case 'alert': return '#ea580c';
+    case 'watch': return '#ca8a04';
+    default: return '#6b7280';
+  }
 }
 
-export default function HomeScreen() {
-  const { data: dashboard } = useDashboard();
-  const { data: marketPrices } = useMarketPrices();
+function severityBg(sev: string): string {
+  switch (sev) {
+    case 'extreme': return '#fef2f2';
+    case 'alert': return '#fff7ed';
+    case 'watch': return '#fefce8';
+    default: return '#f9fafb';
+  }
+}
 
-  if (!dashboard) return <View style={s.center}><Text>Loading...</Text></View>;
+// ---------------------------------------------------------------------------
+// Main Home Screen
+// ---------------------------------------------------------------------------
+export default function HomeScreen() {
+  const { data: dashboard, isLoading: loadingDash, error: dashErr } = useDashboard();
+  const { data: alerts } = useAlerts();
+  const [debugLog, setDebugLog] = React.useState<string>('');
+
+  async function runNetworkDebug() {
+    setDebugLog('Testing connection...');
+    try {
+      setDebugLog('Fetching JSONPlaceholder...');
+      await fetch('https://jsonplaceholder.typicode.com/todos/1');
+      setDebugLog(prev => prev + '\nJSONPlaceholder: OK');
+      
+      setDebugLog(prev => prev + '\nFetching Render API...');
+      const url = `${process.env.EXPO_PUBLIC_API_BASE || 'https://rituchakra-api.onrender.com'}/api/ready`;
+      const res = await fetch(url);
+      setDebugLog(prev => prev + `\nRender: ${res.status} ${res.statusText}`);
+    } catch (e: any) {
+      setDebugLog(prev => prev + `\nError: ${e.message}`);
+    }
+  }
+
+  if (loadingDash) {
+    return (
+      <View style={s.center}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={s.loadingText}>Loading live data…</Text>
+      </View>
+    );
+  }
+
+  if (dashErr || !dashboard) {
+    return (
+      <View style={s.center}>
+        <AlertTriangle size={32} color="#ef4444" />
+        <Text style={s.errorText}>Failed to load data</Text>
+        <Text style={s.errorSub}>{String(dashErr || 'No data')}</Text>
+        <TouchableOpacity style={{ marginTop: 20, padding: 10, backgroundColor: '#3b82f6', borderRadius: 8 }} onPress={runNetworkDebug}>
+          <Text style={{ color: 'white' }}>Run Network Debug</Text>
+        </TouchableOpacity>
+        {debugLog ? <Text style={{ marginTop: 20, marginHorizontal: 20, fontFamily: 'monospace', fontSize: 10 }}>{debugLog}</Text> : null}
+      </View>
+    );
+  }
+
+  const current = dashboard.descriptive?.current;
+  const precip = dashboard.descriptive?.series?.precip_hourly || [];
+  const warnings = dashboard.prescriptive?.warnings || alerts?.warnings || [];
+  const actions = dashboard.prescriptive?.actions || alerts?.actions || [];
+  const risks = dashboard.risks || [];
+  const stories = dashboard.diagnostic?.stories || [];
+  const predictive = dashboard.predictive;
 
   return (
     <SafeAreaView style={s.safe}>
-      <MockBanner />
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* ── Search Bar ── */}
-        <View style={s.searchBar}>
-          <Search color="#94a3b8" size={18} />
-          <TextInput style={s.searchInput} placeholder="Search city, town or district..." placeholderTextColor="#94a3b8" />
-          <View style={s.searchRight}>
-            <Text style={s.searchLocation}>📍 Haldia, West Bengal</Text>
-            <Star color="#f59e0b" size={18} fill="#f59e0b" />
-          </View>
-        </View>
-
-        {/* ── Sky + Rain Row ── */}
-        <View style={s.row}>
-          <View style={[s.card, s.skyCard, { flex: 1.2 }]}>  
-            <Text style={s.cardTitle}>Sky</Text>
-            <View style={s.skyRow}>
-              <CloudRain color="#1e293b" size={36} />
-              <Text style={s.tempBig}>{dashboard.sky.temp}°C</Text>
+        {/* ── Location & Sky ── */}
+        <View style={s.skyCard}>
+          <Text style={s.locationLabel}>{dashboard.location?.label || 'Haldia, West Bengal'}</Text>
+          <View style={s.skyRow}>
+            <View>
+              <Text style={s.tempBig}>{current?.temp_c ?? '--'}°C</Text>
+              <Text style={s.skyLabel}>{current?.sky_label || 'Loading…'}</Text>
             </View>
-            <Text style={s.skyDesc}>{dashboard.sky.condition}, Night - {dashboard.sky.nightTemp}°C</Text>
-            <View style={s.skyStats}>
-              <Text style={s.skyStat}>Visibility    <Text style={s.bold}>{dashboard.sky.visibility} km</Text></Text>
-              <Text style={s.skyStat}>Rain this hour    <Text style={s.bold}>{dashboard.sky.rainThisHour} mm</Text></Text>
-            </View>
-          </View>
-          <View style={[s.card, s.rainCard, { flex: 0.8 }]}>
-            <Text style={s.cardTitle}>Today's Rainfall</Text>
-            <View style={s.rainRow}>
-              <Text style={s.rainBig}>{dashboard.todayRain.amount} <Text style={s.rainUnit}>mm</Text></Text>
-              <Cloud color="#1e293b" size={28} />
-            </View>
-            <Text style={s.rainProb}>Probability</Text>
-            <Text style={s.rainDays}>Day1 <Text style={s.bold}>{dashboard.todayRain.probDay1}%</Text>,  Day2 <Text style={s.bold}>{dashboard.todayRain.probDay2}%</Text></Text>
-          </View>
-        </View>
-
-        {/* ── Next 6 Hours ── */}
-        <View style={[s.card, s.chartCard]}>
-          <Text style={s.cardTitle}>Next 6 Hours</Text>
-          <HourlyBarChart data={dashboard.hourly} />
-        </View>
-
-        {/* ── 7-Day Forecast ── */}
-        <View style={[s.card, s.forecastCard]}>
-          <Text style={s.cardTitle}>7-Day Forecast</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {dashboard.daily.map((d, i) => (
-              <View key={i} style={[s.dayCol, i < 3 && s.dayColHighlight]}>
-                <Text style={s.dayName}>{d.day}</Text>
-                <CloudRain color="#1e293b" size={20} />
-                <Text style={s.dayTemp}>{d.maxTemp} °C</Text>
-                <Text style={s.dayLabel}>High/low</Text>
+            <View style={s.skyMeta}>
+              <View style={s.metaRow}>
+                <Droplets size={14} color="#3b82f6" />
+                <Text style={s.metaText}>{current?.humidity_pct ?? '--'}%</Text>
               </View>
-            ))}
-          </ScrollView>
+              <View style={s.metaRow}>
+                <Wind size={14} color="#64748b" />
+                <Text style={s.metaText}>{current?.wind_ms?.toFixed(1) ?? '--'} m/s {current?.wind_compass || ''}</Text>
+              </View>
+              <View style={s.metaRow}>
+                <CloudRain size={14} color="#60a5fa" />
+                <Text style={s.metaText}>{current?.precip_1h_mm ?? 0} mm/h</Text>
+              </View>
+              {current?.om_us_aqi != null && (
+                <View style={s.metaRow}>
+                  <Text style={s.metaText}>AQI: {current.om_us_aqi}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          {/* Extra stats */}
+          <View style={s.statsRow}>
+            <View style={s.statChip}><Text style={s.statLabel}>Soil</Text><Text style={s.statValue}>{current?.soil_moisture_m3m3?.toFixed(3) ?? '--'} m³/m³</Text></View>
+            <View style={s.statChip}><Text style={s.statLabel}>ET₀</Text><Text style={s.statValue}>{current?.et0_mm ?? '--'} mm</Text></View>
+            <View style={s.statChip}><Text style={s.statLabel}>Cloud</Text><Text style={s.statValue}>{current?.cloud_cover_pct ?? '--'}%</Text></View>
+            {current?.wave_height_m != null && (
+              <View style={s.statChip}><Text style={s.statLabel}>Wave</Text><Text style={s.statValue}>{current.wave_height_m} m</Text></View>
+            )}
+          </View>
         </View>
 
-        {/* ── High Risk Warning ── */}
-        {dashboard.risks.filter(r => r.type === 'extreme' || r.type === 'alert').length > 0 && (
-          <View style={[s.card, s.riskWarning]}>
-            <View style={s.riskHeader}>
-              <AlertTriangle color="#ef4444" size={20} />
-              <Text style={s.riskTitle}>High Risk Warning</Text>
-            </View>
-            {dashboard.risks.filter(r => r.type === 'extreme' || r.type === 'alert').map(r => (
-              <View key={r.id} style={s.riskItem}>
-                <Text style={s.riskText}>{r.title}</Text>
-                <Text style={s.riskDesc}>{r.description}</Text>
+        {/* ── Warnings ── */}
+        {warnings.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>⚠️ Active Warnings</Text>
+            {warnings.slice(0, 5).map((w, i) => (
+              <View key={w.id || i} style={[s.warningCard, { backgroundColor: severityBg(w.severity) }]}>
+                <View style={[s.sevDot, { backgroundColor: severityColor(w.severity) }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.warningTitle, { color: severityColor(w.severity) }]}>{w.title}</Text>
+                  {w.body ? <Text style={s.warningBody}>{w.body}</Text> : null}
+                  <Text style={s.warningSource}>{w.source}</Text>
+                </View>
               </View>
             ))}
           </View>
         )}
 
         {/* ── Actions ── */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Actions</Text>
-          {dashboard.actions.map(a => (
-            <View key={a.id} style={s.actionItem}>
-              <Text style={s.actionText}>{a.description}</Text>
-              <Text style={s.actionTime}>{a.timeframe}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* ── Alert Cards Row (EXTREME + ALERT) ── */}
-        <View style={s.row}>
-          {dashboard.risks.filter(r => r.type === 'extreme').map(r => (
-            <View key={r.id} style={[s.card, s.alertExtreme, { flex: 1 }]}>
-              <CloudRain color="#1e293b" size={24} />
-              <Text style={s.alertTitle}>{r.title}</Text>
-              <Text style={s.alertSource}>{r.description}</Text>
-            </View>
-          ))}
-          {dashboard.risks.filter(r => r.type === 'alert').map(r => (
-            <View key={r.id} style={[s.card, s.alertInfo, { flex: 1 }]}>
-              <Waves color="#1e293b" size={24} />
-              <Text style={s.alertTitle}>{r.title}</Text>
-              <Text style={s.alertDesc}>{r.description}</Text>
-              <Text style={s.alertSource}>{r.source}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* ── AQI / Marine / Quake Row ── */}
-        <View style={s.row}>
-          {dashboard.risks.filter(r => ['aqi', 'marine', 'quake'].includes(r.type)).map(r => (
-            <View key={r.id} style={[s.card, s.infoCard, { flex: 1 }]}>
-              {r.type === 'aqi' && <Wind color="#1e293b" size={24} />}
-              {r.type === 'marine' && <Waves color="#1e293b" size={24} />}
-              {r.type === 'quake' && <Activity color="#1e293b" size={24} />}
-              <Text style={s.infoTitle}>{r.title}</Text>
-              <Text style={s.infoDesc}>{r.description}</Text>
-              <Text style={s.infoSource}>{r.source}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* ── Market Price Analysis ── */}
-        {marketPrices && marketPrices.length > 0 && (
-          <>
-            <Text style={s.sectionHeader}>Market Price Analysis</Text>
-            <View style={[s.card, s.marketCard]}>
-              <Text style={s.cardTitle}>Market</Text>
-              <View style={s.marketHeader}>
-                <Text style={[s.marketCol, { flex: 2 }]}>Crop</Text>
-                <Text style={[s.marketCol, { flex: 1 }]}>Market</Text>
-                <Text style={[s.marketCol, { flex: 0.6, textAlign: 'right' }]}>Price (₹)</Text>
-              </View>
-              {marketPrices.map(p => (
-                <View key={p.id} style={s.marketRow}>
-                  <Text style={[s.marketCell, { flex: 2, fontWeight: '600' }]}>{p.crop}</Text>
-                  <Text style={[s.marketCell, { flex: 1 }]}>{p.market}</Text>
-                  <Text style={[s.marketCell, { flex: 0.6, textAlign: 'right', fontWeight: '700' }]}>{p.price}</Text>
+        {actions.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>🎯 Recommended Actions</Text>
+            {actions.map((a, i) => (
+              <View key={a.id || i} style={s.actionCard}>
+                <Text style={s.actionText}>{a.action}</Text>
+                <Text style={s.actionWhy}>{a.why}</Text>
+                <View style={s.actionMeta}>
+                  <Text style={s.actionWhen}>⏱ {a.when}</Text>
+                  <Text style={s.actionConf}>{a.confidence_pct}% confidence</Text>
                 </View>
-              ))}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ── Hourly Precipitation ── */}
+        {precip.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>🌧️ Hourly Precipitation</Text>
+            <HourlyRainChart data={precip.slice(0, 24)} />
+          </View>
+        )}
+
+        {/* ── Predictive Summary ── */}
+        {predictive && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>📊 7-Day Predictive Summary</Text>
+            <View style={s.statsRow}>
+              <View style={s.predChip}><Text style={s.predLabel}>Rain 7d</Text><Text style={s.predValue}>{predictive.precip_7d_mm?.toFixed(1)} mm</Text></View>
+              <View style={s.predChip}><Text style={s.predLabel}>Water Bal.</Text><Text style={s.predValue}>{predictive.water_balance_7d_mm?.toFixed(1)} mm</Text></View>
+              <View style={s.predChip}><Text style={s.predLabel}>ET₀ 7d</Text><Text style={s.predValue}>{predictive.et0_7d_mm?.toFixed(1)} mm</Text></View>
             </View>
-            <View style={[s.card, s.marketCard]}>
-              <Text style={s.cardTitle}>Market</Text>
-              <MarketBarChart data={marketPrices.map(p => ({ crop: p.crop, price: p.price }))} />
+            <View style={s.statsRow}>
+              <View style={[s.predChip, { backgroundColor: predictive.flood_discharge_trend === 'rising' ? '#fef2f2' : '#f0fdf4' }]}>
+                <Text style={s.predLabel}>Discharge</Text>
+                <Text style={[s.predValue, { color: predictive.flood_discharge_trend === 'rising' ? '#dc2626' : '#16a34a' }]}>
+                  {predictive.flood_discharge_trend?.toUpperCase()}
+                </Text>
+              </View>
+              {predictive.flood_watch_dates?.length > 0 && (
+                <View style={[s.predChip, { backgroundColor: '#fef2f2' }]}>
+                  <Text style={s.predLabel}>Flood Watch</Text>
+                  <Text style={[s.predValue, { color: '#dc2626' }]}>{predictive.flood_watch_dates.join(', ')}</Text>
+                </View>
+              )}
             </View>
-          </>
+          </View>
+        )}
+
+        {/* ── Diagnostic Stories ── */}
+        {stories.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>🔬 Diagnostic Insights</Text>
+            {stories.map((story, i) => (
+              <View key={story.id || i} style={s.storyCard}>
+                <Text style={s.storyTitle}>{story.title}</Text>
+                <Text style={s.storyWhy}>{story.why}</Text>
+                <Text style={s.storyEvidence}>{story.evidence}</Text>
+                <Text style={s.storyImpl}>→ {story.implication}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ── Risk Scores ── */}
+        {risks.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>🛡️ Risk Assessment</Text>
+            {risks.filter(r => r.score_pct > 0).map((risk, i) => (
+              <View key={risk.id || i} style={s.riskRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.riskLabel}>{risk.label}</Text>
+                  <Text style={s.riskSev}>{risk.severity} · {risk.confidence_pct}% conf.</Text>
+                </View>
+                <View style={s.riskBar}>
+                  <View style={[s.riskFill, {
+                    width: `${Math.min(risk.score_pct, 100)}%`,
+                    backgroundColor: risk.score_pct > 50 ? '#dc2626' : risk.score_pct > 25 ? '#f59e0b' : '#22c55e',
+                  }]} />
+                </View>
+                <Text style={s.riskPct}>{risk.score_pct}%</Text>
+              </View>
+            ))}
+          </View>
         )}
 
         <View style={{ height: 32 }} />
@@ -231,83 +274,57 @@ export default function HomeScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#e0f2fe' },
+  safe: { flex: 1, backgroundColor: '#f8fafc' },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#e0f2fe' },
-
-  // Search
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
-  searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: '#1e293b' },
-  searchRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  searchLocation: { fontSize: 12, color: '#0369a1', fontWeight: '600' },
-
-  // Cards
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#bae6fd' },
-  row: { flexDirection: 'row', gap: 10, marginBottom: 0 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b', marginBottom: 8 },
-
-  // Sky
-  skyCard: { borderColor: '#7dd3fc' },
-  skyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
-  tempBig: { fontSize: 32, fontWeight: '700', color: '#1e293b' },
-  skyDesc: { fontSize: 12, color: '#475569', marginBottom: 8 },
-  skyStats: { gap: 2 },
-  skyStat: { fontSize: 12, color: '#475569' },
-  bold: { fontWeight: '700' },
-
-  // Rain
-  rainCard: { borderColor: '#5eead4' },
-  rainRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  rainBig: { fontSize: 28, fontWeight: '700', color: '#1e293b' },
-  rainUnit: { fontSize: 16, fontWeight: '400' },
-  rainProb: { fontSize: 12, color: '#475569' },
-  rainDays: { fontSize: 12, color: '#475569' },
-
-  // Chart
-  chartCard: { borderColor: '#c4b5fd' },
-
-  // Forecast
-  forecastCard: { borderColor: '#d946ef' },
-  dayCol: { alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, marginRight: 4 },
-  dayColHighlight: { backgroundColor: '#f5d0fe' },
-  dayName: { fontSize: 13, fontWeight: '700', color: '#1e293b', marginBottom: 4 },
-  dayTemp: { fontSize: 12, fontWeight: '600', color: '#1e293b', marginTop: 4 },
-  dayLabel: { fontSize: 10, color: '#94a3b8' },
-
-  // Risk Warning
-  riskWarning: { borderColor: '#fca5a5', backgroundColor: '#fef2f2' },
-  riskHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  riskTitle: { fontSize: 16, fontWeight: '700', color: '#991b1b' },
-  riskItem: { marginBottom: 8, paddingLeft: 8, borderLeftWidth: 3, borderLeftColor: '#ef4444' },
-  riskText: { fontSize: 13, fontWeight: '600', color: '#1e293b' },
-  riskDesc: { fontSize: 11, color: '#475569' },
-
+  scrollContent: { padding: 16 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
+  loadingText: { marginTop: 12, color: '#64748b', fontSize: 14 },
+  errorText: { marginTop: 12, color: '#ef4444', fontSize: 16, fontWeight: '600' },
+  errorSub: { marginTop: 4, color: '#94a3b8', fontSize: 12 },
+  // Sky card
+  skyCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 16, elevation: 2 },
+  locationLabel: { fontSize: 13, color: '#64748b', marginBottom: 8, fontWeight: '500' },
+  skyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  tempBig: { fontSize: 48, fontWeight: '700', color: '#0f172a' },
+  skyLabel: { fontSize: 16, color: '#475569', marginTop: 2 },
+  skyMeta: { alignItems: 'flex-end', gap: 6, paddingTop: 8 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontSize: 13, color: '#475569' },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  statChip: { backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  statLabel: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
+  statValue: { fontSize: 13, color: '#334155', fontWeight: '600' },
+  // Sections
+  section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 1 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  // Warnings
+  warningCard: { flexDirection: 'row', borderRadius: 10, padding: 12, marginBottom: 8, gap: 10 },
+  sevDot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
+  warningTitle: { fontSize: 13, fontWeight: '700' },
+  warningBody: { fontSize: 12, color: '#475569', marginTop: 2 },
+  warningSource: { fontSize: 10, color: '#94a3b8', marginTop: 4 },
   // Actions
-  actionItem: { backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  actionText: { fontSize: 13, color: '#1e293b', lineHeight: 18 },
-  actionTime: { fontSize: 11, color: '#64748b', marginTop: 4, fontStyle: 'italic' },
-
-  // Alert Cards
-  alertExtreme: { borderColor: '#ef4444', backgroundColor: '#fef2f2' },
-  alertInfo: { borderColor: '#38bdf8', backgroundColor: '#f0f9ff' },
-  alertTitle: { fontSize: 13, fontWeight: '700', color: '#1e293b', marginTop: 6 },
-  alertDesc: { fontSize: 11, color: '#475569', marginTop: 2 },
-  alertSource: { fontSize: 10, color: '#94a3b8', marginTop: 4 },
-
-  // Info Cards (AQI, Marine, Quake)
-  infoCard: { alignItems: 'center', borderColor: '#bae6fd' },
-  infoTitle: { fontSize: 13, fontWeight: '700', color: '#1e293b', marginTop: 6, textAlign: 'center' },
-  infoDesc: { fontSize: 12, color: '#475569', textAlign: 'center' },
-  infoSource: { fontSize: 10, color: '#94a3b8', marginTop: 4, textAlign: 'center' },
-
-  // Section Header
-  sectionHeader: { fontSize: 18, fontWeight: '700', color: '#1e293b', marginTop: 8, marginBottom: 8, textAlign: 'center' },
-
-  // Market
-  marketCard: { borderColor: '#38bdf8' },
-  marketHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 6, marginBottom: 4 },
-  marketCol: { fontSize: 12, fontWeight: '600', color: '#475569' },
-  marketRow: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  marketCell: { fontSize: 13, color: '#1e293b' },
+  actionCard: { backgroundColor: '#f0f9ff', borderRadius: 10, padding: 12, marginBottom: 8 },
+  actionText: { fontSize: 14, fontWeight: '600', color: '#0369a1' },
+  actionWhy: { fontSize: 12, color: '#475569', marginTop: 4 },
+  actionMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  actionWhen: { fontSize: 11, color: '#64748b' },
+  actionConf: { fontSize: 11, color: '#16a34a', fontWeight: '600' },
+  // Predictive
+  predChip: { backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, minWidth: 90 },
+  predLabel: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
+  predValue: { fontSize: 15, color: '#0f172a', fontWeight: '700', marginTop: 2 },
+  // Stories
+  storyCard: { backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#3b82f6' },
+  storyTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  storyWhy: { fontSize: 12, color: '#475569', marginTop: 4 },
+  storyEvidence: { fontSize: 11, color: '#64748b', marginTop: 2, fontStyle: 'italic' },
+  storyImpl: { fontSize: 12, color: '#0369a1', marginTop: 4, fontWeight: '500' },
+  // Risks
+  riskRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
+  riskLabel: { fontSize: 13, fontWeight: '600', color: '#334155' },
+  riskSev: { fontSize: 10, color: '#94a3b8' },
+  riskBar: { width: 80, height: 8, backgroundColor: '#e2e8f0', borderRadius: 4, overflow: 'hidden' },
+  riskFill: { height: '100%', borderRadius: 4 },
+  riskPct: { fontSize: 14, fontWeight: '700', color: '#334155', width: 36, textAlign: 'right' },
 });
