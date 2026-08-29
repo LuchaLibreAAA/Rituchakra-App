@@ -13,9 +13,9 @@ import {
   BootstrapResponse,
 } from '../types';
 
+import { useLocation } from '../context/LocationContext';
+
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE || 'https://rituchakra-api.onrender.com';
-const DEFAULT_LAT = Number(process.env.EXPO_PUBLIC_DEFAULT_LAT) || 22.0667;
-const DEFAULT_LON = Number(process.env.EXPO_PUBLIC_DEFAULT_LON) || 88.0698;
 
 // ---------------------------------------------------------------------------
 // Track data source for UI banners
@@ -30,11 +30,11 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   try {
     const res = await Promise.race([
       fetch(url, {
+        ...options,
         headers: {
           'Accept': 'application/json',
           ...(options?.headers || {}),
         },
-        ...options,
       }),
       new Promise<Response>((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout (30s)')), 30000)
@@ -52,10 +52,10 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 // ---------------------------------------------------------------------------
 // Location query builder
 // ---------------------------------------------------------------------------
-function locQuery(lat?: number, lon?: number): string {
-  const la = lat ?? DEFAULT_LAT;
-  const lo = lon ?? DEFAULT_LON;
-  return `place=Haldia&lat=${la}&lon=${lo}`;
+function locQuery(loc: Location): string {
+  const district = encodeURIComponent(loc.district || '');
+  const place = encodeURIComponent(loc.place_name || loc.label.split(',')[0] || '');
+  return `district=${district}&place=${place}&lat=${loc.lat}&lon=${loc.lon}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,28 +66,28 @@ export async function getBootstrap(): Promise<BootstrapResponse> {
   return apiFetch<BootstrapResponse>('/api/bootstrap');
 }
 
-export async function getDashboard(lat?: number, lon?: number): Promise<DashboardSnapshot> {
-  return apiFetch<DashboardSnapshot>(`/api/dashboard?${locQuery(lat, lon)}`);
+export async function getDashboard(loc: Location): Promise<DashboardSnapshot> {
+  return apiFetch<DashboardSnapshot>(`/api/dashboard?${locQuery(loc)}`);
 }
 
-export async function getAlerts(lat?: number, lon?: number): Promise<AlertsResponse> {
-  return apiFetch<AlertsResponse>(`/api/alerts?${locQuery(lat, lon)}`);
+export async function getAlerts(loc: Location): Promise<AlertsResponse> {
+  return apiFetch<AlertsResponse>(`/api/alerts?${locQuery(loc)}`);
 }
 
-export async function getNowcastLive(lat?: number, lon?: number): Promise<NowcastLiveResponse> {
-  return apiFetch<NowcastLiveResponse>(`/api/nowcast/live?${locQuery(lat, lon)}`);
+export async function getNowcastLive(loc: Location): Promise<NowcastLiveResponse> {
+  return apiFetch<NowcastLiveResponse>(`/api/nowcast/live?${locQuery(loc)}`);
 }
 
-export async function getForecast(lat?: number, lon?: number): Promise<ForecastResponse> {
-  return apiFetch<ForecastResponse>(`/api/forecast?${locQuery(lat, lon)}`);
+export async function getForecast(loc: Location): Promise<ForecastResponse> {
+  return apiFetch<ForecastResponse>(`/api/forecast?${locQuery(loc)}`);
 }
 
-export async function getRisks(lat?: number, lon?: number): Promise<RisksResponse> {
-  return apiFetch<RisksResponse>(`/api/risks?${locQuery(lat, lon)}`);
+export async function getRisks(loc: Location): Promise<RisksResponse> {
+  return apiFetch<RisksResponse>(`/api/risks?${locQuery(loc)}`);
 }
 
-export async function getMarket(lat?: number, lon?: number): Promise<MarketResponse> {
-  return apiFetch<MarketResponse>(`/api/market?${locQuery(lat, lon)}`);
+export async function getMarket(loc: Location): Promise<MarketResponse> {
+  return apiFetch<MarketResponse>(`/api/market?${locQuery(loc)}`);
 }
 
 export async function searchGeo(query: string): Promise<Location[]> {
@@ -116,56 +116,62 @@ export function useBootstrap() {
   });
 }
 
-export function useDashboard(lat?: number, lon?: number) {
+export function useDashboard() {
+  const { location } = useLocation();
   return useQuery({
-    queryKey: ['dashboard', lat, lon],
-    queryFn: () => getDashboard(lat, lon),
+    queryKey: ['dashboard', location.lat, location.lon],
+    queryFn: () => getDashboard(location),
     staleTime: 60_000,
     retry: 2,
   });
 }
 
-export function useAlerts(lat?: number, lon?: number) {
+export function useAlerts() {
+  const { location } = useLocation();
   return useQuery({
-    queryKey: ['alerts', lat, lon],
-    queryFn: () => getAlerts(lat, lon),
+    queryKey: ['alerts', location.lat, location.lon],
+    queryFn: () => getAlerts(location),
     staleTime: 60_000,
     retry: 2,
   });
 }
 
-export function useNowcastLive(lat?: number, lon?: number) {
+export function useNowcastLive() {
+  const { location } = useLocation();
   return useQuery({
-    queryKey: ['nowcast-live', lat, lon],
-    queryFn: () => getNowcastLive(lat, lon),
+    queryKey: ['nowcast-live', location.lat, location.lon],
+    queryFn: () => getNowcastLive(location),
     staleTime: 30_000,
     refetchInterval: 60_000, // poll every 60s per API docs
     retry: 2,
   });
 }
 
-export function useForecastData(lat?: number, lon?: number) {
+export function useForecastData() {
+  const { location } = useLocation();
   return useQuery({
-    queryKey: ['forecast', lat, lon],
-    queryFn: () => getForecast(lat, lon),
+    queryKey: ['forecast', location.lat, location.lon],
+    queryFn: () => getForecast(location),
     staleTime: 300_000,
     retry: 2,
   });
 }
 
-export function useRisks(lat?: number, lon?: number) {
+export function useRisks() {
+  const { location } = useLocation();
   return useQuery({
-    queryKey: ['risks', lat, lon],
-    queryFn: () => getRisks(lat, lon),
+    queryKey: ['risks', location.lat, location.lon],
+    queryFn: () => getRisks(location),
     staleTime: 300_000,
     retry: 2,
   });
 }
 
-export function useMarket(lat?: number, lon?: number) {
+export function useMarket() {
+  const { location } = useLocation();
   return useQuery({
-    queryKey: ['market', lat, lon],
-    queryFn: () => getMarket(lat, lon),
+    queryKey: ['market', location.lat, location.lon],
+    queryFn: () => getMarket(location),
     staleTime: 300_000,
     retry: 2,
   });

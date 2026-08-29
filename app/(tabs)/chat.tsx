@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Keyboa
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Send, RefreshCw, Globe } from 'lucide-react-native';
 import { useChatMutation } from '../../src/api/client';
+import { useLocation } from '../../src/context/LocationContext';
 import { useTranslation } from 'react-i18next';
 import { ChatHistoryEntry } from '../../src/types';
 
@@ -22,10 +23,13 @@ interface ChatBubble {
   content: string;
   suggestions?: string[];
   citations?: any[];
+  isError?: boolean;
+  originalText?: string;
 }
 
 export default function ChatScreen() {
   const { t, i18n } = useTranslation();
+  const { location } = useLocation();
   const [messages, setMessages] = useState<ChatBubble[]>([]);
   const [input, setInput] = useState('');
   const [localeIdx, setLocaleIdx] = useState(0);
@@ -41,16 +45,19 @@ export default function ChatScreen() {
   }
 
   async function sendMessage(text: string) {
-    if (!text.trim()) return;
+    if (!text.trim() || chatMutation.isPending) return;
     const userBubble: ChatBubble = { role: 'user', content: text };
     setMessages(prev => [...prev, userBubble]);
     setInput('');
 
-    // Build history (last 6 turns)
-    const history: ChatHistoryEntry[] = messages.slice(-6).map(m => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.content,
-    }));
+    // Build history (last 6 turns, ignoring errors)
+    const history: ChatHistoryEntry[] = messages
+      .filter(m => !m.isError)
+      .slice(-6)
+      .map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content,
+      }));
 
     try {
       const response = await chatMutation.mutateAsync({
@@ -58,12 +65,12 @@ export default function ChatScreen() {
         locale_hint: currentLocale,
         output_locale: currentLocale,
         location: {
-          id: 'town:haldia_wes',
-          label: 'Haldia, West Bengal',
-          state: 'West Bengal',
-          district: 'Purba Medinipur',
-          lat: 22.0667,
-          lon: 88.0698,
+          id: location.id,
+          label: location.label,
+          state: location.state,
+          district: location.district,
+          lat: location.lat,
+          lon: location.lon,
         },
         history,
         stream: false,
@@ -77,9 +84,18 @@ export default function ChatScreen() {
       };
       setMessages(prev => [...prev, assistantBubble]);
     } catch (err: any) {
+      let errorMsg = 'Failed to reach the advisor. Please try again.';
+      if (err instanceof Error) {
+        errorMsg = err.message;
+      } else if (typeof err === 'string') {
+        errorMsg = err;
+      }
+
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `⚠️ Error: ${err.message || 'Failed to reach the advisor. Please try again.'}`,
+        content: `⚠️ System Error:\n${errorMsg}`,
+        isError: true,
+        originalText: text,
       }]);
     }
 
@@ -92,7 +108,7 @@ export default function ChatScreen() {
 
         {/* ── Header ── */}
         <View style={cs.header}>
-          <Text style={cs.headerTitle}>🤖 AI Agro-Advisor</Text>
+          <Text style={cs.headerTitle}> Rituchakra AI Assistant</Text>
           <TouchableOpacity onPress={cycleLang} style={cs.langBtn}>
             <Globe size={16} color="#3b82f6" />
             <Text style={cs.langTxt}>{currentLocale.toUpperCase()}</Text>
@@ -107,7 +123,7 @@ export default function ChatScreen() {
               <Text style={cs.emptySub}>Get precise agro-meteorological guidance for your location.</Text>
               <View style={cs.presetGrid}>
                 {PRESETS.map((p, i) => (
-                  <TouchableOpacity key={i} style={cs.presetBtn} onPress={() => sendMessage(p)}>
+                  <TouchableOpacity key={i} style={cs.presetBtn} onPress={() => sendMessage(p)} disabled={chatMutation.isPending}>
                     <Text style={cs.presetTxt}>{p}</Text>
                   </TouchableOpacity>
                 ))}
@@ -116,24 +132,47 @@ export default function ChatScreen() {
           )}
 
           {messages.map((msg, i) => (
-            <View key={i} style={[cs.bubble, msg.role === 'user' ? cs.userBubble : cs.aiBubble]}>
-              <Text style={[cs.bubbleText, msg.role === 'user' ? cs.userText : cs.aiText]}>
+            <View key={i} style={[
+              cs.bubble, 
+              msg.role === 'user' ? cs.userBubble : cs.aiBubble,
+              msg.isError && cs.errorBubble
+            ]}>
+              <Text style={[
+                cs.bubbleText, 
+                msg.role === 'user' ? cs.userText : cs.aiText,
+                msg.isError && cs.errorText
+              ]}>
                 {msg.content}
               </Text>
-              {msg.suggestions && msg.suggestions.length > 0 && (
+              
+              {msg.isError && msg.originalText && (
+                <TouchableOpacity 
+                  style={cs.retryBtn} 
+                  onPress={() => {
+                    setMessages(prev => prev.filter((_, idx) => idx !== i));
+                    sendMessage(msg.originalText!);
+                  }}
+                >
+                  <RefreshCw size={14} color="#dc2626" />
+                  <Text style={cs.retryTxt}>Retry Message</Text>
+                </TouchableOpacity>
+              )}
+
+              {Array.isArray(msg.suggestions) && msg.suggestions.length > 0 && (
                 <View style={cs.sugRow}>
                   {msg.suggestions.map((s, j) => (
-                    <TouchableOpacity key={j} style={cs.sugBtn} onPress={() => sendMessage(s)}>
+                    <TouchableOpacity key={j} style={cs.sugBtn} onPress={() => sendMessage(s)} disabled={chatMutation.isPending}>
                       <Text style={cs.sugTxt}>{s}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
-              {msg.citations && msg.citations.length > 0 && (
+              {Array.isArray(msg.citations) && msg.citations.length > 0 && (
                 <View style={cs.citRow}>
-                  {msg.citations.map((c: any, j: number) => (
-                    <Text key={j} style={cs.citTxt}>📎 {c.title || c.source || JSON.stringify(c)}</Text>
-                  ))}
+                  {msg.citations.map((c: any, j: number) => {
+                    const citationText = c && typeof c === 'object' ? (c.title || c.source || JSON.stringify(c)) : String(c);
+                    return <Text key={j} style={cs.citTxt}>📎 {citationText}</Text>;
+                  })}
                 </View>
               )}
             </View>
@@ -186,10 +225,14 @@ const cs = StyleSheet.create({
   bubble: { borderRadius: 16, padding: 14, maxWidth: '85%' },
   userBubble: { backgroundColor: '#3b82f6', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
   aiBubble: { backgroundColor: '#fff', alignSelf: 'flex-start', borderBottomLeftRadius: 4, elevation: 1, borderWidth: 1, borderColor: '#e2e8f0' },
+  errorBubble: { backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1 },
   bubbleText: { fontSize: 14, lineHeight: 20 },
   userText: { color: '#fff' },
   aiText: { color: '#334155' },
+  errorText: { color: '#dc2626' },
   thinkTxt: { color: '#64748b', fontSize: 12, marginTop: 4 },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, backgroundColor: '#fee2e2', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  retryTxt: { color: '#dc2626', fontSize: 12, fontWeight: '600' },
   sugRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   sugBtn: { backgroundColor: '#eff6ff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   sugTxt: { fontSize: 11, color: '#1d4ed8' },

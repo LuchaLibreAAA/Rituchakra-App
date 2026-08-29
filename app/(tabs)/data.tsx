@@ -123,29 +123,58 @@ export default function DataScreen() {
 
         {/* ── Risk Breakdown ── */}
         {risks.length > 0 && (
-          <View style={ds.section}>
-            <Text style={ds.secTitle}>🛡️ Risk Factors</Text>
-            {risks.filter(r => r.score_pct > 5).map((risk, i) => (
-              <View key={risk.id || i} style={ds.riskCard}>
-                <View style={ds.riskHead}>
-                  <Text style={ds.riskLabel}>{risk.label}</Text>
-                  <Text style={[ds.riskScore, {
-                    color: risk.score_pct > 50 ? '#dc2626' : risk.score_pct > 25 ? '#f59e0b' : '#22c55e'
-                  }]}>{risk.score_pct}%</Text>
+          <View>
+            <Text style={[ds.secTitle, { marginBottom: 12 }]}>🛡️ Risk Factors</Text>
+            {risks.filter(r => r.score_pct > 0).map((risk, i) => {
+              const lbl = risk.label.toLowerCase();
+              let icon = '⚠️';
+              if (lbl.includes('flood') || lbl.includes('water') || lbl.includes('rain')) icon = '🌊';
+              else if (lbl.includes('drought') || lbl.includes('dry')) icon = '🏜️';
+              else if (lbl.includes('heat') || lbl.includes('temp')) icon = '🌡️';
+              else if (lbl.includes('pest') || lbl.includes('disease') || lbl.includes('insect')) icon = '🐛';
+              else if (lbl.includes('frost') || lbl.includes('cold') || lbl.includes('freeze')) icon = '❄️';
+              else if (lbl.includes('wind') || lbl.includes('cyclone')) icon = '🌪️';
+              else if (lbl.includes('air') || lbl.includes('aqi') || lbl.includes('pollution')) icon = '😷';
+              else if (lbl.includes('market') || lbl.includes('price')) icon = '📉';
+              else if (lbl.includes('crop') || lbl.includes('plant')) icon = '🌱';
+
+              const score = risk.score_pct;
+              let level = 'Low';
+              let color = '#10b981'; // Green
+              if (score > 50) { level = 'High'; color = '#ef4444'; }
+              else if (score > 25) { level = 'Medium'; color = '#f59e0b'; }
+
+              return (
+                <View key={risk.id || i} style={[
+                  ds.section, 
+                  { 
+                    borderWidth: 1.5, 
+                    borderColor: `${color}80`, // 50% opacity border
+                    shadowColor: color,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 10,
+                    elevation: 5,
+                  }
+                ]}>
+                  <View style={ds.riskHead}>
+                    <Text style={ds.riskLabel}>{icon} {risk.label}</Text>
+                    <Text style={[ds.riskScore, { color }]}>{score}% ({level})</Text>
+                  </View>
+                  <View style={ds.riskBarBg}>
+                    <View style={[ds.riskBarFill, {
+                      width: `${Math.min(score, 100)}%`,
+                      backgroundColor: color,
+                    }]} />
+                  </View>
+                  <View style={ds.factorRow}>
+                    {risk.factors.filter((f: any) => f.contribution_pct > 0).map((f: any, j: number) => (
+                      <Text key={j} style={ds.factorTxt}>{f.label}: {f.contribution_pct}%</Text>
+                    ))}
+                  </View>
                 </View>
-                <View style={ds.riskBarBg}>
-                  <View style={[ds.riskBarFill, {
-                    width: `${Math.min(risk.score_pct, 100)}%`,
-                    backgroundColor: risk.score_pct > 50 ? '#dc2626' : risk.score_pct > 25 ? '#f59e0b' : '#22c55e',
-                  }]} />
-                </View>
-                <View style={ds.factorRow}>
-                  {risk.factors.filter(f => f.contribution_pct > 0).map((f, j) => (
-                    <Text key={j} style={ds.factorTxt}>{f.label}: {f.contribution_pct}%</Text>
-                  ))}
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
