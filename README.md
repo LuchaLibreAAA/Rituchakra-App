@@ -39,10 +39,10 @@
 | Screen | Route | Key Data Feeds | Visual Elements | Offline / Mock Support |
 | :--- | :--- | :--- | :--- | :---: |
 | **Home** | `app/(tabs)/index.tsx` | Sky temp, Rain prob, CAP Hazards, Mandi rates | SVG Bar Charts, Alert Cards, Commodity Grid | ✅ 100% |
-| **Analytics** | `app/(tabs)/analytics.tsx` | INSAT-IR1 radar nowcasting, Lightning, Hugli tides | 2×2 Matrix, 4-way Tile, Kalman Line Chart | ✅ 100% |
-| **Data** | `app/(tabs)/data.tsx` | 7-day GloFAS hydrology, FAO-56 $ET_0$, Soil moisture | 4 SVG Analytic Charts, Flood Badges, Summary Chips | ✅ 100% |
+| **Analytics** | `app/(tabs)/analytics.tsx` | 7-day forecast, FAO-56 $ET_0$, Soil moisture | 4 SVG Analytic Charts, Summary Table, Flood Badges | ✅ 100% |
+| **Data** | `app/(tabs)/data.tsx` | IMD-CAP, GloFAS hydrology, Market prices, AQI | Alerts Grid, Actions Checklist, Market Table & Bar Chart | ✅ 100% |
 | **Maps** | `app/(tabs)/maps.tsx` | Station telemetry, Regional radars, River basins | Stylized map canvas, District focus | ✅ 100% |
-| **Advisor** | `app/(tabs)/chat.tsx` | Multi-agent agro LLM, Official scientific sources | Speech bubbles, Fast presets, Lang Switcher | ✅ 100% |
+| **Advisor** | `app/(tabs)/chat.tsx` | Multi-agent agro LLM, Official scientific sources | Central Card UI, Speech bubbles, Preset pills | ✅ 100% |
 
 
 ### 📱 1. 🏠 Home & Dashboard (`/`)
@@ -51,11 +51,7 @@
 * **CAP Early Warning Banners**: Instant hazard warnings from IMD-CAP (Extreme rain, lightning pulse, heavy storm).
 * **Mandi Market Prices**: Real-time commodity rate trackers (Paddy, Jute, Potato, Mustard, Chilli, etc.) paired with dynamic bar comparisons.
 
-### ⚡ 2. 📈 Analytics & Nowcasting (`/analytics`)
-* **Real-Time Storm Matrix**: Live metrics for Lightning, Cloudburst risk, Downburst wind speed, Cell rain rate, and Hugli tide heights.
-* **Between-Scene Kalman Filter**: High-precision line charts displaying continuous rain rate estimations with live error feedback and scene update countdowns.
-
-### 💧 3. 📊 Agro-Climatic Data & Forecast (`/data`)
+### ⚡ 2. 📈 Analytics & Forecast (`/analytics`)
 * **7-Day Agricultural Water Balance**: Daily Max Temp, Precipitation, Probabilities, Reference Evapotranspiration ($ET_0$), and Soil Moisture.
 * **Multi-Chart Analytics Suite**:
   - 🌧️ Rain vs. $ET_0$ Combo Charts
@@ -63,12 +59,16 @@
   - 🌱 Soil Saturation & Rain Probability Waves
   - ⏱️ Micro-Hourly Breakdown
 
+### 💧 3. 📊 Agro-Climatic Data & Alerts (`/data`)
+* **Risks & Actions**: Dynamic prescriptive actions checklist and a comprehensive hazard grid displaying Extreme Warnings, River Flooding, AQI, Marine conditions, and Quakes.
+* **Market Price Analysis**: Searchable and interactive datatable for Mandi prices, coupled with a dynamic SVG horizontal bar chart ranking the top 10 most expensive crops.
+
 ### 🗺️ 4. 🧭 Hyperlocal Geospatial Map (`/maps`)
 * Visual regional hazard maps, satellite radar overlays, and district-level weather station mapping.
 
 ### 🤖 5. 💬 Multilingual AI Agro-Advisor (`/chat`)
-* **Seamless Language Switcher**: Switch on-the-fly between **English**, **हिंदी (Hindi)**, and **বাংলা (Bengali)**.
-* **Curated Agri-Query Presets**: Instant answers for irrigation advisories, flood rankings, mandi rates, and district outlooks.
+* **Seamless Language Switcher**: Switch on-the-fly between **English**, **हिंदी (Hindi)**, and **বাংলা (Bengali)** via pill toggles.
+* **Curated Agri-Query Presets**: Instant answers for irrigation advisories, flood rankings, mandi rates, and district outlooks rendered as a grid of quick-action chips.
 * **Official Data Provenance**: Transparent links and citations to **IMD**, **Open-Meteo GloFAS**, **CPCB**, and **Agmarknet**.
 
 ---
