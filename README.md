@@ -202,6 +202,31 @@ npx expo start --web
 
 ---
 
+## 🤝 Contribution Guidelines & Development Standards
+
+We welcome contributions from meteorologists, software engineers, and agro-specialists!
+
+1. **Branching Strategy**:
+   - `main`: Production-ready releases
+   - `feat/<feature-name>`: New capabilities (e.g., `feat/offline-sqlite`)
+   - `fix/<bug-name>`: Bug fixes and performance patches
+
+2. **Commit Conventions**:
+   Follow [Conventional Commits](https://www.conventionalcommits.org/):
+   - `feat:` New UI screen or algorithmic metric
+   - `fix:` Bug fix or rendering resolution
+   - `docs:` Documentation or README updates
+   - `refactor:` Code restructuring without logic changes
+
+3. **Type Safety & Linting**:
+   Ensure zero TypeScript compilation errors before filing a Pull Request:
+   ```bash
+   npx tsc --noEmit
+   ```
+
+
+---
+
 ## 🌐 Official Data Providers & References
 * 🛰️ **IMD**: India Meteorological Department Weather Forecasts & CAP Alerts
 * 🌊 **Open-Meteo GloFAS**: Global Flood Awareness & Discharge APIs
