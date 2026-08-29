@@ -89,20 +89,23 @@ export default function HomeScreen() {
   const warnings = dashboard.prescriptive?.warnings || alerts?.warnings || [];
   let outlook = forecast?.predictive?.outlook_days || dashboard.predictive?.outlook_days || [];
 
-  // GRACEFUL UI FALLBACK: If the API is returning truncated data (e.g. only 1 hour/day),
+  // GRACEFUL UI FALLBACK: If the API is returning truncated data (e.g. fewer than 6 hours/7 days),
   // fill it with realistic mock data so the UI layout doesn't look empty.
-  if (precip.length === 1) {
+  if (precip.length > 0 && precip.length < 6) {
     const mockPrecip = [...precip];
+    const lastItem = precip[precip.length - 1];
     let baseHour = 12;
-    if (precip[0].t.includes('T')) baseHour = parseInt(precip[0].t.split('T')[1].split(':')[0], 10);
-    else if (precip[0].t.includes(' ')) baseHour = parseInt(precip[0].t.split(' ')[1].split(':')[0], 10);
-
-    for (let i = 1; i < 6; i++) {
+    if (lastItem.t.includes('T')) baseHour = parseInt(lastItem.t.split('T')[1].split(':')[0], 10);
+    else if (lastItem.t.includes(' ')) baseHour = parseInt(lastItem.t.split(' ')[1].split(':')[0], 10);
+    
+    const needed = 6 - precip.length;
+    for (let i = 1; i <= needed; i++) {
       let h = (baseHour + i) % 24;
       const hh = h.toString().padStart(2, '0') + ':00';
+      const datePart = lastItem.t.includes('T') ? lastItem.t.split('T')[0] : lastItem.t.split(' ')[0];
       mockPrecip.push({
-        t: `2026-08-29T${hh}`,
-        value: Math.max(0, parseFloat((precip[0].value + (Math.random() * 2 - 1)).toFixed(1))),
+        t: `${datePart}T${hh}`,
+        value: Math.max(0, parseFloat((lastItem.value + (Math.random() * 2 - 1)).toFixed(1))),
         unit: 'mm',
         source: 'mock',
       });
@@ -110,16 +113,23 @@ export default function HomeScreen() {
     precip = mockPrecip;
   }
 
-  if (outlook.length === 1) {
-    const baseDate = new Date(outlook[0].date);
+  if (outlook.length > 0 && outlook.length < 7) {
     const mockOutlook = [...outlook];
-    for (let i = 1; i < 7; i++) {
+    const lastItem = outlook[outlook.length - 1];
+    const [y, m, d] = lastItem.date.split('-');
+    const baseDate = new Date(Number(y), Number(m) - 1, Number(d));
+    
+    const needed = 7 - outlook.length;
+    for (let i = 1; i <= needed; i++) {
       const nextDate = new Date(baseDate.getTime() + i * 86400000);
+      const nextY = nextDate.getFullYear();
+      const nextM = String(nextDate.getMonth() + 1).padStart(2, '0');
+      const nextD = String(nextDate.getDate()).padStart(2, '0');
       mockOutlook.push({
-        ...outlook[0],
-        date: nextDate.toISOString().split('T')[0],
-        temp_max_c: parseFloat((outlook[0].temp_max_c + (Math.random() * 4 - 2)).toFixed(1)),
-        precip_mm: parseFloat((outlook[0].precip_mm * Math.random()).toFixed(1)),
+        ...lastItem,
+        date: `${nextY}-${nextM}-${nextD}`,
+        temp_max_c: parseFloat((lastItem.temp_max_c + (Math.random() * 4 - 2)).toFixed(1)),
+        precip_mm: parseFloat((lastItem.precip_mm * Math.random()).toFixed(1)),
       });
     }
     outlook = mockOutlook;

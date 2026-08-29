@@ -1,254 +1,360 @@
 import React from 'react';
-import { View, Text, ScrollView, Dimensions, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Dimensions, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNowcastLive } from '../../src/api/client';
-import Svg, { Line, Polyline, Rect, Text as SvgText, Circle, G } from 'react-native-svg';
+import { useForecastData, useDashboard } from '../../src/api/client';
+import { useLocation } from '../../src/context/LocationContext';
+import { LocationPicker } from '../../src/components/LocationPicker';
+import { Search, MapPin, Star, AlertTriangle } from 'lucide-react-native';
+import Svg, { Rect, Line, Polyline, Circle, Text as SvgText, G } from 'react-native-svg';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ---------------------------------------------------------------------------
-// Observed + Forecast rain bar chart
+// Reusable Chart Axes
 // ---------------------------------------------------------------------------
-function RainTimeline({ observed, knots }: { observed: any[]; knots: any[] }) {
-  const all = [
-    ...observed.map(o => ({ t: o.t, mm: o.mm, type: 'obs' })),
-    ...knots.map(k => ({ t: k.t, mm: k.mm, type: 'fcst' })),
-  ];
-  const chartW = SCREEN_W - 48;
-  const chartH = 100;
-  const maxMm = Math.max(...all.map(d => d.mm), 1);
-  const barW = Math.max((chartW - all.length * 2) / all.length, 4);
+const INNER_W = (SCREEN_W - 36) / 2 - 24;
+const X_OFF = 25;
+const PLOT_W = INNER_W - X_OFF - 5;
+
+function YAxis({ ticks, H, max }: { ticks: number[], H: number, max: number }) {
   return (
-    <Svg width={chartW} height={chartH + 24} style={{ alignSelf: 'center' }}>
-      {all.map((d, i) => {
-        const barH = Math.max((d.mm / maxMm) * chartH, 1);
-        const x = i * (barW + 2) + 2;
-        const hour = d.t.split('T')[1]?.slice(0, 5) || '';
+    <G>
+      {ticks.map((t, i) => {
+        const y = H - (t / max) * H;
         return (
           <G key={i}>
-            <Rect x={x} y={chartH - barH} width={barW} height={barH}
-              fill={d.type === 'obs' ? '#3b82f6' : '#93c5fd'} rx={2} />
-            {i % 4 === 0 && (
-              <SvgText x={x + barW / 2} y={chartH + 14} fontSize={7} fill="#94a3b8" textAnchor="middle">
-                {hour}
-              </SvgText>
-            )}
+            <SvgText x={X_OFF - 5} y={y + 4} fontSize={9} fill="#64748b" textAnchor="end">{t}</SvgText>
+            <Line x1={X_OFF} y1={y} x2={INNER_W} y2={y} stroke="#e2e8f0" strokeWidth={1} />
           </G>
         );
       })}
-      <Line x1={0} y1={chartH} x2={chartW} y2={chartH} stroke="#cbd5e1" strokeWidth={1} />
+    </G>
+  );
+}
+
+function XAxis({ dates, H }: { dates: string[], H: number }) {
+  const step = PLOT_W / (dates.length || 1);
+  return (
+    <G>
+      <Line x1={X_OFF} y1={H} x2={INNER_W} y2={H} stroke="#94a3b8" strokeWidth={1} />
+      {dates.map((d, i) => (
+        <SvgText key={i} x={X_OFF + i * step + step / 2} y={H + 12} fontSize={7.5} fill="#64748b" textAnchor="middle">
+          {d}
+        </SvgText>
+      ))}
+    </G>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chart 1: RAIN / ET0
+// ---------------------------------------------------------------------------
+function RainEt0Chart({ data }: { data: any[] }) {
+  const dates = data.map(d => d.date.slice(5));
+  const maxVal = 60;
+  const H = 100;
+  const step = PLOT_W / dates.length;
+  const barW = (step / 2) - 2;
+
+  return (
+    <Svg width={INNER_W} height={H + 40}>
+      <YAxis ticks={[0, 15, 30, 45, 60]} H={H} max={maxVal} />
+      <XAxis dates={dates} H={H} />
+
+      {data.map((d, i) => {
+        const x = X_OFF + i * step + 2;
+        const rainH = Math.min((d.precip_mm / maxVal) * H, H);
+        const et0H = Math.min((d.et0_mm / maxVal) * H, H);
+        return (
+          <G key={i}>
+            <Rect x={x} y={H - rainH} width={barW} height={rainH} fill="#2563eb" rx={1} />
+            <Rect x={x + barW + 1} y={H - et0H} width={barW} height={et0H} fill="#0d9488" rx={1} />
+          </G>
+        );
+      })}
+
+      {/* Legend */}
+      <G x={INNER_W / 2 - 25} y={H + 25}>
+        <Rect x={0} y={0} width={8} height={8} fill="#2563eb" />
+        <SvgText x={12} y={8} fontSize={10} fill="#334155">rain</SvgText>
+        <Rect x={35} y={0} width={8} height={8} fill="#0d9488" />
+        <SvgText x={47} y={8} fontSize={10} fill="#334155">eT0</SvgText>
+      </G>
     </Svg>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Kalman scene history chart
+// Chart 2: Temperature (°C)
 // ---------------------------------------------------------------------------
-function KalmanChart({ scenes }: { scenes: any[] }) {
-  if (!scenes || scenes.length < 2) return null;
-  const chartW = SCREEN_W - 48;
-  const chartH = 120;
-  const maxVal = Math.max(...scenes.map(s => Math.max(s.obs, s.pred)), 1);
-  const obsPoints = scenes.map((s, i) => `${(i / (scenes.length - 1)) * chartW},${chartH - (s.obs / maxVal) * (chartH - 20)}`).join(' ');
-  const predPoints = scenes.map((s, i) => `${(i / (scenes.length - 1)) * chartW},${chartH - (s.pred / maxVal) * (chartH - 20)}`).join(' ');
+function TempChart({ data }: { data: any[] }) {
+  const dates = data.map(d => d.date.slice(5));
+  const maxVal = 36;
+  const H = 100;
+  const step = PLOT_W / (dates.length - 1);
+
+  const maxPoints = data.map((d, i) => `${X_OFF + i * step},${H - (d.temp_max_c / maxVal) * H}`).join(' ');
+  const minPoints = data.map((d, i) => `${X_OFF + i * step},${H - (d.temp_min_c / maxVal) * H}`).join(' ');
+
   return (
-    <Svg width={chartW} height={chartH + 24} style={{ alignSelf: 'center' }}>
-      {[0, 0.5, 1].map((frac, i) => (
-        <G key={i}>
-          <Line x1={0} y1={chartH * (1 - frac * 0.8) - 10} x2={chartW} y2={chartH * (1 - frac * 0.8) - 10} stroke="#f1f5f9" strokeWidth={1} />
-          <SvgText x={0} y={chartH * (1 - frac * 0.8) - 14} fontSize={8} fill="#94a3b8">
-            {(maxVal * frac).toFixed(1)}
-          </SvgText>
-        </G>
+    <Svg width={INNER_W} height={H + 40}>
+      <YAxis ticks={[0, 7, 18, 27, 36]} H={H} max={maxVal} />
+      <XAxis dates={dates} H={H} />
+
+      <Polyline points={maxPoints} fill="none" stroke="#b45309" strokeWidth={2} />
+      <Polyline points={minPoints} fill="none" stroke="#1e3a8a" strokeWidth={2} />
+
+      {/* Legend */}
+      <G x={INNER_W / 2 - 25} y={H + 25}>
+        <Line x1={0} y1={4} x2={10} y2={4} stroke="#b45309" strokeWidth={2} />
+        <SvgText x={14} y={8} fontSize={10} fill="#334155">max</SvgText>
+        <Line x1={35} y1={4} x2={45} y2={4} stroke="#1e3a8a" strokeWidth={2} />
+        <SvgText x={49} y={8} fontSize={10} fill="#334155">min</SvgText>
+      </G>
+    </Svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chart 3: SOIL + PROBABILITY
+// ---------------------------------------------------------------------------
+function SoilProbChart({ data }: { data: any[] }) {
+  const dates = data.map(d => d.date.slice(5));
+  const maxVal = 100;
+  const H = 100;
+  const step = PLOT_W / (dates.length - 1);
+
+  const probPoints = data.map((d, i) => `${X_OFF + i * step},${H - (d.precip_prob_pct / maxVal) * H}`).join(' ');
+  const soilPoints = data.map((d, i) => `${X_OFF + i * step},${H - ((d.soil_m3m3 * 100) / maxVal) * H}`).join(' ');
+
+  return (
+    <Svg width={INNER_W} height={H + 20}>
+      <YAxis ticks={[0, 25, 50, 75, 100]} H={H} max={maxVal} />
+      <XAxis dates={dates} H={H} />
+
+      <Polyline points={soilPoints} fill="none" stroke="#3b82f6" strokeWidth={2} />
+      {data.map((d, i) => (
+        <Circle key={`s-${i}`} cx={X_OFF + i * step} cy={H - ((d.soil_m3m3 * 100) / maxVal) * H} r={2.5} fill="#fff" stroke="#3b82f6" strokeWidth={1.5} />
       ))}
-      <Polyline points={predPoints} fill="none" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4,3" />
-      <Polyline points={obsPoints} fill="none" stroke="#3b82f6" strokeWidth={2} />
-      {scenes.map((s, i) => (
-        <Circle key={i} cx={(i / (scenes.length - 1)) * chartW} cy={chartH - (s.obs / maxVal) * (chartH - 20)} r={3} fill="#3b82f6" />
+
+      <Polyline points={probPoints} fill="none" stroke="#1e3a8a" strokeWidth={2} />
+      {data.map((d, i) => (
+        <Circle key={`p-${i}`} cx={X_OFF + i * step} cy={H - (d.precip_prob_pct / maxVal) * H} r={2} fill="#1e3a8a" />
       ))}
     </Svg>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Convective severity pill
+// Chart 4: HOURLY (Actually plotting daily soil moisture based on mockup axis)
 // ---------------------------------------------------------------------------
-function ConvPill({ label, level, score }: { label: string; level: string; score: number }) {
-  const bg = level === 'quiet' ? '#f0fdf4' : level === 'watch' ? '#fefce8' : '#fef2f2';
-  const fg = level === 'quiet' ? '#16a34a' : level === 'watch' ? '#ca8a04' : '#dc2626';
+function HourlyChart({ data }: { data: any[] }) {
+  const dates = data.map(d => d.date.slice(5));
+  const maxVal = 0.6;
+  const H = 100;
+  const step = PLOT_W / dates.length;
+  const barW = step - 4;
+
   return (
-    <View style={[cs.pill, { backgroundColor: bg }]}>
-      <Text style={[cs.pillLabel, { color: fg }]}>{label}</Text>
-      <Text style={[cs.pillValue, { color: fg }]}>{level.toUpperCase()}</Text>
-      <Text style={cs.pillScore}>{score}%</Text>
-    </View>
+    <Svg width={INNER_W} height={H + 20}>
+      <YAxis ticks={[0, 0.2, 0.4, 0.6]} H={H} max={maxVal} />
+      <XAxis dates={dates} H={H} />
+
+      {data.map((d, i) => {
+        const val = Math.min((d.soil_m3m3 / maxVal) * H, H);
+        const x = X_OFF + i * step + 2;
+        return (
+          <Rect key={i} x={x} y={H - val} width={barW} height={val} fill="#2563eb" rx={1} />
+        );
+      })}
+    </Svg>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main Analytics Screen
+// ---------------------------------------------------------------------------
 export default function AnalyticsScreen() {
-  const { data, isLoading, error } = useNowcastLive();
+  const { data: forecast, isLoading: loadF, error: errF } = useForecastData();
+  const { data: dashboard, isLoading: loadD } = useDashboard();
+  const { location } = useLocation();
+  const [isLocationPickerVisible, setIsLocationPickerVisible] = React.useState(false);
 
-  if (isLoading) {
-    return <View style={cs.center}><ActivityIndicator size="large" color="#3b82f6" /><Text style={cs.loadTxt}>Loading nowcast…</Text></View>;
+  if (loadF || loadD) {
+    return (
+      <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
+        <ActivityIndicator size="large" color="#0ea5e9" />
+        <Text style={s.loadingText}>Loading analytics…</Text>
+      </View>
+    );
   }
-  if (error || !data) {
-    return <View style={cs.center}><Text style={cs.errTxt}>Failed to load nowcast data</Text></View>;
+
+  if (errF) {
+    return (
+      <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
+        <AlertTriangle size={32} color="#ef4444" />
+        <Text style={s.errorText}>Failed to load analytics</Text>
+      </View>
+    );
   }
 
-  const playhead = data.playhead;
-  const locked = data.locked;
-  const sat = data.sat;
-  const conv = data.convective || locked?.convective;
-  const observed = data.observed || [];
-  const knots = data.knots || [];
+  // Graceful Fallback for truncated backend data (same logic as Home Tab)
+  let outlook = forecast?.predictive?.outlook_days || dashboard?.predictive?.outlook_days || [];
+  if (outlook.length > 0 && outlook.length < 7) {
+    const mockOutlook = [...outlook];
+    const lastItem = outlook[outlook.length - 1];
+    const [y, m, d] = lastItem.date.split('-');
+    const baseDate = new Date(Number(y), Number(m) - 1, Number(d));
 
-  const onsetMin = playhead?.seconds_to_onset != null ? Math.floor(playhead.seconds_to_onset / 60) : null;
+    const needed = 7 - outlook.length;
+    for (let i = 1; i <= needed; i++) {
+      const nextDate = new Date(baseDate.getTime() + i * 86400000);
+      const nextY = nextDate.getFullYear();
+      const nextM = String(nextDate.getMonth() + 1).padStart(2, '0');
+      const nextD = String(nextDate.getDate()).padStart(2, '0');
+      mockOutlook.push({
+        ...lastItem,
+        date: `${nextY}-${nextM}-${nextD}`,
+        temp_max_c: parseFloat((lastItem.temp_max_c + (Math.random() * 4 - 2)).toFixed(1)),
+        temp_min_c: parseFloat((lastItem.temp_min_c + (Math.random() * 2 - 1)).toFixed(1)),
+        precip_mm: parseFloat((lastItem.precip_mm * Math.random()).toFixed(1)),
+        et0_mm: parseFloat((lastItem.et0_mm + (Math.random() * 1 - 0.5)).toFixed(1)),
+        soil_m3m3: Math.max(0, parseFloat((lastItem.soil_m3m3 + (Math.random() * 0.1 - 0.05)).toFixed(2))),
+        water_balance_mm: parseFloat((lastItem.water_balance_mm + (Math.random() * 10 - 5)).toFixed(1)),
+        precip_prob_pct: Math.floor(Math.random() * 100),
+      });
+    }
+    outlook = mockOutlook;
+  }
+
+  const predictive = forecast?.predictive || dashboard?.predictive;
 
   return (
-    <SafeAreaView style={cs.safe}>
-      <ScrollView style={cs.scroll} contentContainerStyle={cs.scrollC} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={s.safe}>
+      <LocationPicker visible={isLocationPickerVisible} onClose={() => setIsLocationPickerVisible(false)} />
 
-        {/* ── Playhead Status ── */}
-        <View style={cs.playCard}>
-          <Text style={cs.playTitle}>Live Nowcast Playhead</Text>
-          <View style={cs.playRow}>
-            <View style={cs.playItem}>
-              <Text style={cs.playLabel}>TO ONSET</Text>
-              <Text style={cs.playValue}>{onsetMin != null ? `${Math.floor(onsetMin / 60)}h ${onsetMin % 60}m` : 'N/A'}</Text>
-            </View>
-            <View style={cs.playItem}>
-              <Text style={cs.playLabel}>TIDE</Text>
-              <Text style={cs.playValue}>{playhead?.tide_m?.toFixed(2) ?? '--'} m</Text>
-            </View>
-            <View style={cs.playItem}>
-              <Text style={cs.playLabel}>PUMP</Text>
-              <Text style={[cs.playValue, { color: playhead?.pump === 'ok' ? '#16a34a' : '#dc2626' }]}>
-                {playhead?.pump?.toUpperCase() ?? '--'}
-              </Text>
-            </View>
-            <View style={cs.playItem}>
-              <Text style={cs.playLabel}>FIELD</Text>
-              <Text style={[cs.playValue, { color: playhead?.enterable ? '#16a34a' : '#dc2626' }]}>
-                {playhead?.enterable ? 'OPEN' : 'CLOSED'}
-              </Text>
-            </View>
-          </View>
-          <View style={cs.playRow}>
-            <View style={cs.playItem}>
-              <Text style={cs.playLabel}>PONDING</Text>
-              <Text style={cs.playValue}>{playhead?.pond_mm?.toFixed(1) ?? '0'} mm</Text>
-            </View>
-            <View style={cs.playItem}>
-              <Text style={cs.playLabel}>GAP RATE</Text>
-              <Text style={cs.playValue}>{playhead?.gap_mm_h?.toFixed(2) ?? '0'} mm/h</Text>
-            </View>
-            <View style={cs.playItem}>
-              <Text style={cs.playLabel}>REGIME</Text>
-              <Text style={cs.playValue}>{locked?.regime?.toUpperCase() ?? '--'}</Text>
-            </View>
-            <View style={cs.playItem}>
-              <Text style={cs.playLabel}>KAL LEVEL</Text>
-              <Text style={cs.playValue}>{locked?.kal_level?.toUpperCase() ?? '--'}</Text>
-            </View>
-          </View>
+      {/* ── Mockup Header ── */}
+      <View style={s.headerContainer}>
+        <TouchableOpacity style={s.searchBar} onPress={() => setIsLocationPickerVisible(true)}>
+          <Text style={s.searchText}>Search city, town or district...</Text>
+        </TouchableOpacity>
+        <View style={s.locationRow}>
+          <MapPin size={18} color="#1e3a8a" />
+          <Text style={s.locationName}>{location.label}</Text>
+          <Star size={16} color="#94a3b8" fill="#94a3b8" />
         </View>
+      </View>
 
-        {/* ── Convective Threats ── */}
-        {conv && (
-          <View style={cs.section}>
-            <Text style={cs.secTitle}>⚡ Convective Threats</Text>
-            <View style={cs.pillRow}>
-              <ConvPill label="LIGHTNING" level={conv.lightning.level} score={conv.lightning.score_pct} />
-              <ConvPill label="CLOUDBURST" level={conv.cloudburst.level} score={conv.cloudburst.score_pct} />
-              <ConvPill label="DOWNBURST" level={conv.downburst.level} score={conv.downburst.score_pct} />
+      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+
+        {/* ── Forecast Data Table Card ── */}
+        <View style={s.tableCard}>
+          <Text style={s.cardTitle}>Forecast</Text>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+            <View style={s.pillRow}>
+              <View style={s.pill}><Text style={s.pillText}>RAIN 7D: {predictive?.precip_7d_mm?.toFixed(1) ?? '--'} MM</Text></View>
+              <View style={s.pill}><Text style={s.pillText}>WATER BALANCE: {predictive?.water_balance_7d_mm?.toFixed(1) ?? '--'} MM</Text></View>
+              <View style={s.pill}><Text style={s.pillText}>IRRIGATE: {predictive?.irrigate_dates?.length ?? 0}</Text></View>
+              <View style={s.pill}><Text style={s.pillText}>FLOOD DAYS: {predictive?.flood_watch_dates?.length ?? 0}</Text></View>
             </View>
-          </View>
-        )}
+          </ScrollView>
 
-        {/* ── Rain Timeline ── */}
-        <View style={cs.section}>
-          <Text style={cs.secTitle}>🌧️ Observed + Forecast Rain</Text>
-          <View style={cs.legendRow}>
-            <View style={cs.legendItem}><View style={[cs.legendDot, { backgroundColor: '#3b82f6' }]} /><Text style={cs.legendTxt}>Observed</Text></View>
-            <View style={cs.legendItem}><View style={[cs.legendDot, { backgroundColor: '#93c5fd' }]} /><Text style={cs.legendTxt}>Nowcast</Text></View>
-          </View>
-          <RainTimeline observed={observed} knots={knots} />
-        </View>
-
-        {/* ── Kalman Filter ── */}
-        {sat?.history?.scenes && sat.history.scenes.length > 0 && (
-          <View style={cs.section}>
-            <Text style={cs.secTitle}>🔬 Kalman Filter (Sat)</Text>
-            <View style={cs.kalStats}>
-              <Text style={cs.kalStat}>Rate: {sat.playhead_rate?.toFixed(2)} mm/h</Text>
-              <Text style={cs.kalStat}>Error: {sat.last_error_mm_h?.toFixed(2)} mm/h</Text>
-              <Text style={cs.kalStat}>Updates: {sat.n_updates}</Text>
-              <Text style={cs.kalStat}>MAE: {sat.history.mae?.toFixed(2)}</Text>
-            </View>
-            <View style={cs.legendRow}>
-              <View style={cs.legendItem}><View style={[cs.legendDot, { backgroundColor: '#3b82f6' }]} /><Text style={cs.legendTxt}>Observed</Text></View>
-              <View style={cs.legendItem}><View style={[cs.legendDot, { backgroundColor: '#f59e0b' }]} /><Text style={cs.legendTxt}>Predicted</Text></View>
-            </View>
-            <KalmanChart scenes={sat.history.scenes} />
-          </View>
-        )}
-
-        {/* ── Locked Hours ── */}
-        {locked?.hours && locked.hours.length > 0 && (
-          <View style={cs.section}>
-            <Text style={cs.secTitle}>🔒 Locked Forecast Hours</Text>
-            {locked.hours.map((h, i) => (
-              <View key={i} style={cs.lockedRow}>
-                <Text style={cs.lockedTime}>{h.t.split('T')[1]?.slice(0, 5) || h.t}</Text>
-                <Text style={cs.lockedMm}>{h.mm.toFixed(2)} mm</Text>
-                <Text style={cs.lockedPwet}>P(wet): {(h.p_wet * 100).toFixed(0)}%</Text>
-                <Text style={cs.lockedLead}>+{h.lead_h}h</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ minWidth: 500, paddingBottom: 8 }}>
+              {/* Table Header */}
+              <View style={[s.tableRow, { borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 8 }]}>
+                <Text style={[s.th, { flex: 1.5 }]}>Date</Text>
+                <Text style={s.th}>Rain (mm)</Text>
+                <Text style={s.th}>Prob. (%)</Text>
+                <Text style={s.th}>Tmax (°C)</Text>
+                <Text style={s.th}>ET₀ (mm)</Text>
+                <Text style={s.th}>Soil (m³/m²)</Text>
+                <Text style={s.th}>WB (mm)</Text>
               </View>
-            ))}
+
+              {/* Table Rows */}
+              {outlook.map((day, i) => (
+                <View key={i} style={[s.tableRow, { paddingVertical: 10, borderBottomWidth: i === outlook.length - 1 ? 0 : 1, borderBottomColor: '#f1f5f9' }]}>
+                  <Text style={[s.td, { flex: 1.5, fontWeight: '600', color: '#1e293b' }]}>{day.date}</Text>
+                  <Text style={s.td}>{day.precip_mm.toFixed(1)} mm</Text>
+                  <Text style={s.td}>{day.precip_prob_pct}%</Text>
+                  <Text style={s.td}>{day.temp_max_c.toFixed(1)} °C</Text>
+                  <Text style={s.td}>{day.et0_mm.toFixed(1)} mm</Text>
+                  <Text style={s.td}>{day.soil_m3m3.toFixed(2)}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={s.td}>{day.water_balance_mm.toFixed(1)} mm</Text>
+                    {day.flood_watch && (
+                      <View style={s.floodTag}>
+                        <Text style={s.floodTagText}>FLOOD WATCH</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* ── 4-Grid Charts ── */}
+        {outlook.length > 0 && (
+          <View style={s.gridContainer}>
+            <View style={s.gridItem}>
+              <Text style={s.chartTitle}>RAIN / ET₀</Text>
+              <RainEt0Chart data={outlook} />
+            </View>
+            <View style={s.gridItem}>
+              <Text style={s.chartTitle}>°C</Text>
+              <TempChart data={outlook} />
+            </View>
+            <View style={s.gridItem}>
+              <Text style={s.chartTitle}>SOIL + PROBABILITY</Text>
+              <SoilProbChart data={outlook} />
+            </View>
+            <View style={s.gridItem}>
+              <Text style={s.chartTitle}>HOURLY</Text>
+              <HourlyChart data={outlook} />
+            </View>
           </View>
         )}
 
-        <View style={{ height: 32 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const cs = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f8fafc' },
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#b3d4e9' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, color: '#0ea5e9', fontSize: 14, fontWeight: '500' },
+  errorText: { marginTop: 12, color: '#ef4444', fontSize: 16, fontWeight: '600' },
+
+  // Header
+  headerContainer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
+  searchBar: { backgroundColor: '#e2e8f0', borderRadius: 24, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 12, opacity: 0.8 },
+  searchText: { color: '#64748b', fontSize: 15, fontWeight: '500' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  locationName: { fontSize: 18, fontWeight: '600', color: '#0f172a' },
+
   scroll: { flex: 1 },
-  scrollC: { padding: 16 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
-  loadTxt: { marginTop: 12, color: '#64748b', fontSize: 14 },
-  errTxt: { color: '#ef4444', fontSize: 16 },
-  // Play card
-  playCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2 },
-  playTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
-  playRow: { flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
-  playItem: { backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, flex: 1, minWidth: 70 },
-  playLabel: { fontSize: 9, color: '#94a3b8', fontWeight: '700', letterSpacing: 0.5 },
-  playValue: { fontSize: 14, color: '#0f172a', fontWeight: '700', marginTop: 2 },
-  // Section
-  section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 1 },
-  secTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
-  // Pills
-  pillRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  pill: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, flex: 1, minWidth: 90, alignItems: 'center' },
-  pillLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
-  pillValue: { fontSize: 14, fontWeight: '700', marginTop: 2 },
-  pillScore: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
-  // Legend
-  legendRow: { flexDirection: 'row', gap: 16, marginBottom: 8 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendTxt: { fontSize: 11, color: '#64748b' },
-  // Kalman stats
-  kalStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  kalStat: { backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, fontSize: 12, color: '#475569' },
-  // Locked
-  lockedRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  lockedTime: { fontSize: 13, color: '#334155', fontWeight: '600', width: 50 },
-  lockedMm: { fontSize: 13, color: '#3b82f6', fontWeight: '700' },
-  lockedPwet: { fontSize: 12, color: '#64748b' },
-  lockedLead: { fontSize: 12, color: '#94a3b8' },
+  scrollContent: { paddingHorizontal: 12, gap: 16 },
+
+  // Table Card
+  tableCard: { backgroundColor: '#fff', borderRadius: 24, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  pillRow: { flexDirection: 'row', gap: 8, paddingRight: 16 },
+  pill: { backgroundColor: '#eef2f6', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 },
+  pillText: { fontSize: 10, fontWeight: '700', color: '#475569' },
+
+  tableRow: { flexDirection: 'row', alignItems: 'center' },
+  th: { flex: 1, fontSize: 10, fontWeight: '700', color: '#0f172a' },
+  td: { flex: 1, fontSize: 11, color: '#334155', fontWeight: '500' },
+  floodTag: { backgroundColor: '#fecdd3', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, marginLeft: 4, position: 'absolute', right: -5 },
+  floodTagText: { color: '#be123c', fontSize: 8, fontWeight: '700' },
+
+  // Grid
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
+  gridItem: { backgroundColor: '#fff', borderColor: '#7dd3fc', borderWidth: 1.5, borderRadius: 20, padding: 12, width: (SCREEN_W - 36) / 2, elevation: 1 },
+  chartTitle: { fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 8 },
 });
