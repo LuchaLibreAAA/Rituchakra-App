@@ -224,6 +224,15 @@ We welcome contributions from meteorologists, software engineers, and agro-speci
    npx tsc --noEmit
    ```
 
+---
+
+## 🗺️ Future Roadmap & Native Horizons
+
+- [ ] **Phase 2 — Offline SQLite & Vector Store**: On-device caching of 30-day historical agro-weather telemetry for zero-network field work.
+- [ ] **Phase 3 — Native Android Weather Widget**: Glanceable home screen widgets displaying real-time downburst alerts and $ET_0$ water balance.
+- [ ] **Phase 4 — Audio Voice Advisory Engine**: Voice-in / Voice-out conversational AI advisor in regional dialects (Bangla & Rural Hindi) for improved accessibility.
+- [ ] **Phase 5 — Bluetooth LoRa / BLE Field Sensor Sync**: Direct Bluetooth pairing with solar-powered farm rain gauges and soil tensiometers.
+
 
 ---
 
