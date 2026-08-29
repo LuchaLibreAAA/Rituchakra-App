@@ -91,6 +91,28 @@ flowchart LR
 
 ---
 
+## 🧮 Agro-Climatic Intelligence & Algorithmic Models
+
+Rituchakra Mobile computes and presents precision agro-meteorological metrics derived from validated open-source meteorological formulations:
+
+### 1. 🌀 Between-Scene Kalman Nowcasting Filter
+Calculates smoothed rain-rate transitions ($\hat{x}_k$) between satellite radar scan scenes to predict convective downbursts:
+$$\hat{x}_k = \hat{x}_{k|k-1} + K_k \left( z_k - H \hat{x}_{k|k-1} \right)$$
+* **Update Interval**: 15-minute INSAT-3D/3DR scan integration
+* **Error Correction**: Dynamic Kalman Gain ($K_k$) adjusted against local AWS (Automatic Weather Station) ground sensors
+
+### 2. ☀️ FAO-56 Penman-Monteith Evapotranspiration ($ET_0$)
+Provides field-level reference crop water consumption for scientific irrigation scheduling:
+$$ET_0 = \frac{0.408 \Delta (R_n - G) + \gamma \frac{900}{T + 273} u_2 (e_s - e_a)}{\Delta + \gamma (1 + 0.34 u_2)}$$
+* **Inputs**: Solar radiation ($R_n$), Air Temp ($T$), Wind Speed ($u_2$ at 2m), Vapor Deficit ($e_s - e_a$)
+* **Agri Guidance**: Recommends `IRRIGATE: NO` when $P_{\text{eff}} \ge ET_0$ over consecutive days
+
+### 3. 🌊 GloFAS River Basin Discharge & Ponding Index
+* Multi-point hydrological runoff model comparing river stage height against historical flood quantiles.
+
+
+---
+
 ## 📂 Project Structure
 
 ```
