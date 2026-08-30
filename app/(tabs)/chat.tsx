@@ -3,7 +3,14 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Keyboa
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Send, RefreshCw, MapPin, Star, Plus, Mic, MicOff } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
-import Voice, { SpeechResultsEvent, SpeechErrorEvent } from '@react-native-voice/voice';
+
+// Safely load Voice (requires native build; silently unavailable in Expo Go)
+let Voice: any = null;
+try {
+  Voice = require('@react-native-voice/voice').default;
+} catch (_) {
+  console.warn('Voice module not available — run `npx expo run:android` to enable STT.');
+}
 import { useChatMutation } from '../../src/api/client';
 import { useLocation } from '../../src/context/LocationContext';
 import { useTranslation } from 'react-i18next';
@@ -53,11 +60,11 @@ export default function ChatScreen() {
     try {
       Voice.onSpeechStart = () => setIsListening(true);
       Voice.onSpeechEnd = () => setIsListening(false);
-      Voice.onSpeechError = (e: SpeechErrorEvent) => {
+      Voice.onSpeechError = (e: any) => {
         console.log('Voice Error:', e.error);
         setIsListening(false);
       };
-      Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      Voice.onSpeechResults = (e: any) => {
         if (e.value && e.value.length > 0) {
           setInput(e.value[0]);
         }
