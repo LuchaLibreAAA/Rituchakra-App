@@ -18,7 +18,7 @@ const LOCALES = ['en', 'hi', 'bn'] as const;
 interface ChatBubble {
   role: 'user' | 'assistant';
   content: string;
-  suggestions?: string[];
+  suggestions?: any[];
   citations?: any[];
   isError?: boolean;
   originalText?: string;
@@ -168,11 +168,14 @@ export default function ChatScreen() {
 
                 {Array.isArray(msg.suggestions) && msg.suggestions.length > 0 && (
                   <View style={cs.sugRow}>
-                    {msg.suggestions.map((s, j) => (
-                      <TouchableOpacity key={j} style={cs.sugBtn} onPress={() => sendMessage(s)} disabled={chatMutation.isPending}>
-                        <Text style={cs.sugTxt}>{s}</Text>
-                      </TouchableOpacity>
-                    ))}
+                    {msg.suggestions.map((s, j) => {
+                      const textLabel = typeof s === 'string' ? s : (s?.label || JSON.stringify(s));
+                      return (
+                        <TouchableOpacity key={j} style={cs.sugBtn} onPress={() => sendMessage(textLabel)} disabled={chatMutation.isPending}>
+                          <Text style={cs.sugTxt}>{textLabel}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 )}
                 {Array.isArray(msg.citations) && msg.citations.length > 0 && (
