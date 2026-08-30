@@ -1,7 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Send, RefreshCw, MapPin, Star, Plus } from 'lucide-react-native';
+import { Send, RefreshCw, MapPin, Star, Plus, Mic, MicOff } from 'lucide-react-native';
+import * as Speech from 'expo-speech';
+import Voice, { SpeechResultsEvent, SpeechErrorEvent } from '@react-native-voice/voice';
 import { useChatMutation } from '../../src/api/client';
 import { useLocation } from '../../src/context/LocationContext';
 import { useTranslation } from 'react-i18next';
@@ -30,10 +32,44 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatBubble[]>([]);
   const [input, setInput] = useState('');
   const [localeIdx, setLocaleIdx] = useState(0);
+  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const chatMutation = useChatMutation();
 
   const currentLocale = LOCALES[localeIdx];
+
+  useEffect(() => {
+    Voice.onSpeechStart = () => setIsListening(true);
+    Voice.onSpeechEnd = () => setIsListening(false);
+    Voice.onSpeechError = (e: SpeechErrorEvent) => {
+      console.log('Voice Error:', e.error);
+      setIsListening(false);
+    };
+    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      if (e.value && e.value.length > 0) {
+        setInput(e.value[0]);
+      }
+    };
+    return () => {
+      Voice.destroy().then(Voice.removeAllListeners);
+      Speech.stop();
+    };
+  }, []);
+
+  const toggleListening = async () => {
+    if (isListening) {
+      try {
+        await Voice.stop();
+        setIsListening(false);
+      } catch (e) { console.error(e); }
+    } else {
+      try {
+        Speech.stop();
+        setInput('');
+        await Voice.start(currentLocale === 'en' ? 'en-US' : (currentLocale === 'hi' ? 'hi-IN' : 'bn-IN'));
+      } catch (e) { console.error(e); }
+    }
+  };
 
   function setLanguage(idx: number) {
     setLocaleIdx(idx);
@@ -42,6 +78,13 @@ export default function ChatScreen() {
 
   async function sendMessage(text: string) {
     if (!text.trim() || chatMutation.isPending) return;
+
+    Speech.stop();
+    if (isListening) {
+      Voice.stop().catch(console.error);
+      setIsListening(false);
+    }
+
     const userBubble: ChatBubble = { role: 'user', content: text };
     setMessages(prev => [...prev, userBubble]);
     setInput('');
@@ -65,13 +108,20 @@ export default function ChatScreen() {
         stream: false,
       });
 
+      const responseContent = response.message?.content || 'No response received.';
       const assistantBubble: ChatBubble = {
         role: 'assistant',
-        content: response.message?.content || 'No response received.',
+        content: responseContent,
         suggestions: response.message?.suggestions,
         citations: response.message?.citations,
       };
       setMessages(prev => [...prev, assistantBubble]);
+
+      Speech.speak(responseContent.replace(/[*_#]/g, ''), {
+        language: currentLocale === 'en' ? 'en-US' : (currentLocale === 'hi' ? 'hi-IN' : 'bn-IN'),
+        pitch: 1.0,
+        rate: 0.9,
+      });
     } catch (err: any) {
       let errorMsg = 'Failed to reach the advisor. Please try again.';
       if (err instanceof Error) {
@@ -200,15 +250,18 @@ export default function ChatScreen() {
           {/* ── Input Bar (Inside Card) ── */}
           <View style={cs.inputArea}>
             <View style={cs.inputWrapper}>
+              <TouchableOpacity onPress={toggleListening} style={cs.micBtn}>
+                {isListening ? <MicOff size={20} color="#ef4444" /> : <Mic size={20} color="#0369a1" />}
+              </TouchableOpacity>
               <TextInput
                 style={cs.input}
                 value={input}
                 onChangeText={setInput}
-                placeholder=""
+                placeholder={isListening ? "Listening..." : ""}
                 returnKeyType="send"
                 onSubmitEditing={() => sendMessage(input)}
               />
-              <TouchableOpacity style={cs.sendBtn} onPress={() => sendMessage(input)} disabled={chatMutation.isPending}>
+              <TouchableOpacity style={cs.sendBtn} onPress={() => sendMessage(input)} disabled={chatMutation.isPending || !input.trim()}>
                 <Text style={cs.sendBtnTxt}>Send</Text>
               </TouchableOpacity>
             </View>
@@ -282,8 +335,9 @@ const cs = StyleSheet.create({
   
   // Input Area inside card
   inputArea: { padding: 16, backgroundColor: '#f0f9ff', borderTopWidth: 0 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e0f2fe', borderRadius: 24, paddingLeft: 16, paddingRight: 4, paddingVertical: 4, borderWidth: 1, borderColor: '#38bdf8' },
-  input: { flex: 1, fontSize: 14, color: '#0f172a', paddingVertical: 8 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e0f2fe', borderRadius: 24, paddingLeft: 6, paddingRight: 4, paddingVertical: 4, borderWidth: 1, borderColor: '#38bdf8' },
+  micBtn: { padding: 10 },
+  input: { flex: 1, fontSize: 14, color: '#0f172a', paddingVertical: 8, paddingHorizontal: 4 },
   sendBtn: { backgroundColor: '#f0f9ff', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: '#38bdf8' },
   sendBtnTxt: { color: '#0f172a', fontSize: 14, fontWeight: '500' },
   
