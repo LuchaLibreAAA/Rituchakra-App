@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, NativeModules } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Send, RefreshCw, MapPin, Star, Plus, Mic, MicOff } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
@@ -52,8 +52,9 @@ export default function ChatScreen() {
 
   const currentLocaleOption = LOCALE_OPTIONS[localeIdx];
 
-  // Check if native Voice module is available (requires custom native build)
-  const voiceAvailable = Voice != null && typeof Voice.start === 'function';
+  // Check if native Voice module is available by inspecting NativeModules
+  // The JS wrapper has methods, but NativeModules.Voice or NativeModules.PlatformVoice is what actually runs
+  const voiceAvailable = Voice != null && !!(NativeModules.Voice || NativeModules.PlatformVoice);
 
   useEffect(() => {
     if (!voiceAvailable) return;
@@ -74,7 +75,7 @@ export default function ChatScreen() {
     }
     return () => {
       try {
-        Voice.destroy().then(Voice.removeAllListeners);
+        if (voiceAvailable) Voice.destroy().then(Voice.removeAllListeners);
       } catch (_) {}
       Speech.stop();
     };
@@ -83,19 +84,23 @@ export default function ChatScreen() {
   const toggleListening = async () => {
     if (!voiceAvailable) {
       console.warn('Voice recognition not available. Run `npx expo run:android` to enable.');
+      alert('Microphone requires a native build. Run npx expo run:android');
       return;
     }
     if (isListening) {
       try {
         await Voice.stop();
         setIsListening(false);
-      } catch (e) { console.error(e); }
+      } catch (e) { console.warn(e); }
     } else {
       try {
         Speech.stop();
         setInput('');
         await Voice.start(currentLocaleOption.tts);
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+        console.warn('Voice start failed:', e); 
+        setIsListening(false);
+      }
     }
   };
 
