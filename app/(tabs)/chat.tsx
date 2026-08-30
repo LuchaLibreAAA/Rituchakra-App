@@ -38,25 +38,39 @@ export default function ChatScreen() {
 
   const currentLocale = LOCALES[localeIdx];
 
+  // Check if native Voice module is available (requires custom native build)
+  const voiceAvailable = Voice != null && typeof Voice.start === 'function';
+
   useEffect(() => {
-    Voice.onSpeechStart = () => setIsListening(true);
-    Voice.onSpeechEnd = () => setIsListening(false);
-    Voice.onSpeechError = (e: SpeechErrorEvent) => {
-      console.log('Voice Error:', e.error);
-      setIsListening(false);
-    };
-    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
-      if (e.value && e.value.length > 0) {
-        setInput(e.value[0]);
-      }
-    };
+    if (!voiceAvailable) return;
+    try {
+      Voice.onSpeechStart = () => setIsListening(true);
+      Voice.onSpeechEnd = () => setIsListening(false);
+      Voice.onSpeechError = (e: SpeechErrorEvent) => {
+        console.log('Voice Error:', e.error);
+        setIsListening(false);
+      };
+      Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+        if (e.value && e.value.length > 0) {
+          setInput(e.value[0]);
+        }
+      };
+    } catch (err) {
+      console.warn('Voice module setup failed:', err);
+    }
     return () => {
-      Voice.destroy().then(Voice.removeAllListeners);
+      try {
+        Voice.destroy().then(Voice.removeAllListeners);
+      } catch (_) {}
       Speech.stop();
     };
-  }, []);
+  }, [voiceAvailable]);
 
   const toggleListening = async () => {
+    if (!voiceAvailable) {
+      console.warn('Voice recognition not available. Run `npx expo run:android` to enable.');
+      return;
+    }
     if (isListening) {
       try {
         await Voice.stop();
@@ -66,7 +80,8 @@ export default function ChatScreen() {
       try {
         Speech.stop();
         setInput('');
-        await Voice.start(currentLocale === 'en' ? 'en-US' : (currentLocale === 'hi' ? 'hi-IN' : 'bn-IN'));
+        const lang = currentLocale === 'en' ? 'en-US' : currentLocale === 'hi' ? 'hi-IN' : 'bn-IN';
+        await Voice.start(lang);
       } catch (e) { console.error(e); }
     }
   };
@@ -79,8 +94,8 @@ export default function ChatScreen() {
   async function sendMessage(text: string) {
     if (!text.trim() || chatMutation.isPending) return;
 
-    Speech.stop();
-    if (isListening) {
+    try { Speech.stop(); } catch (_) {}
+    if (isListening && voiceAvailable) {
       Voice.stop().catch(console.error);
       setIsListening(false);
     }
