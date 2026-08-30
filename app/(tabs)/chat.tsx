@@ -15,11 +15,18 @@ const PRESETS = [
   'STATE MANDI PRICES', 'COMPARE WITH PUNE', 'AIR QUALITY'
 ];
 
-const LOCALES = ['en', 'hi', 'bn'] as const;
+const LOCALE_OPTIONS = [
+  { key: 'en', label: 'EN', ietf: 'en-IN', i18nLang: 'en', tts: 'en-IN' },
+  { key: 'hi', label: 'HI', ietf: 'hi-IN', i18nLang: 'hi', tts: 'hi-IN' },
+  { key: 'bn', label: 'BN', ietf: 'bn-IN', i18nLang: 'bn', tts: 'bn-IN' },
+] as const;
+
+type LocaleKey = typeof LOCALE_OPTIONS[number]['key'];
 
 interface ChatBubble {
   role: 'user' | 'assistant';
   content: string;
+  locale?: string;   // actual locale returned by the API
   suggestions?: any[];
   citations?: any[];
   isError?: boolean;
@@ -36,7 +43,7 @@ export default function ChatScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const chatMutation = useChatMutation();
 
-  const currentLocale = LOCALES[localeIdx];
+  const currentLocaleOption = LOCALE_OPTIONS[localeIdx];
 
   // Check if native Voice module is available (requires custom native build)
   const voiceAvailable = Voice != null && typeof Voice.start === 'function';
@@ -80,15 +87,17 @@ export default function ChatScreen() {
       try {
         Speech.stop();
         setInput('');
-        const lang = currentLocale === 'en' ? 'en-US' : currentLocale === 'hi' ? 'hi-IN' : 'bn-IN';
-        await Voice.start(lang);
+        await Voice.start(currentLocaleOption.tts);
       } catch (e) { console.error(e); }
     }
   };
 
   function setLanguage(idx: number) {
     setLocaleIdx(idx);
-    i18n.changeLanguage(LOCALES[idx]);
+    i18n.changeLanguage(LOCALE_OPTIONS[idx].i18nLang);
+    // Clear history so the new language doesn't mix with old responses
+    setMessages([]);
+    try { Speech.stop(); } catch (_) {}
   }
 
   async function sendMessage(text: string) {
@@ -117,26 +126,33 @@ export default function ChatScreen() {
     try {
       const response = await chatMutation.mutateAsync({
         message: text,
-        locale_hint: currentLocale,
-        output_locale: currentLocale,
+        locale_hint: currentLocaleOption.ietf,
+        output_locale: currentLocaleOption.ietf,
         history,
         stream: false,
       });
 
       const responseContent = response.message?.content || 'No response received.';
+      const responseLocale = response.message?.locale || currentLocaleOption.ietf;
       const assistantBubble: ChatBubble = {
         role: 'assistant',
         content: responseContent,
+        locale: responseLocale,
         suggestions: response.message?.suggestions,
         citations: response.message?.citations,
       };
       setMessages(prev => [...prev, assistantBubble]);
 
-      Speech.speak(responseContent.replace(/[*_#]/g, ''), {
-        language: currentLocale === 'en' ? 'en-US' : (currentLocale === 'hi' ? 'hi-IN' : 'bn-IN'),
-        pitch: 1.0,
-        rate: 0.9,
-      });
+      // Determine TTS language from response locale
+      const ttsLang = responseLocale;
+
+      try {
+        Speech.speak(responseContent.replace(/[*_#`~]/g, ''), {
+          language: ttsLang,
+          pitch: 1.0,
+          rate: 0.9,
+        });
+      } catch (_) {}
     } catch (err: any) {
       let errorMsg = 'Failed to reach the advisor. Please try again.';
       if (err instanceof Error) {
@@ -172,9 +188,9 @@ export default function ChatScreen() {
         {/* ── Buttons Row ── */}
         <View style={cs.buttonsRow}>
           <View style={cs.langGroup}>
-            {LOCALES.map((loc, idx) => (
-              <TouchableOpacity key={loc} style={[cs.topBtn, idx === localeIdx && cs.topBtnActive]} onPress={() => setLanguage(idx)}>
-                <Text style={[cs.topBtnTxt, idx === localeIdx && cs.topBtnTxtActive]}>{loc.toUpperCase()}</Text>
+            {LOCALE_OPTIONS.map((opt, idx) => (
+              <TouchableOpacity key={opt.key} style={[cs.topBtn, idx === localeIdx && cs.topBtnActive]} onPress={() => setLanguage(idx)}>
+                <Text style={[cs.topBtnTxt, idx === localeIdx && cs.topBtnTxtActive]}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -217,6 +233,9 @@ export default function ChatScreen() {
                 ]}>
                   {msg.content}
                 </Text>
+                {msg.role === 'assistant' && msg.locale && (
+                  <Text style={cs.localeBadge}>{msg.locale.toUpperCase()}</Text>
+                )}
                 
                 {msg.isError && msg.originalText && (
                   <TouchableOpacity 
@@ -342,6 +361,7 @@ const cs = StyleSheet.create({
   thinkTxt: { color: '#64748b', fontSize: 12, marginTop: 4 },
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, backgroundColor: '#fee2e2', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   retryTxt: { color: '#dc2626', fontSize: 12, fontWeight: '600' },
+  localeBadge: { fontSize: 9, color: '#94a3b8', fontWeight: '700', letterSpacing: 0.5, marginTop: 4, alignSelf: 'flex-start' },
   sugRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   sugBtn: { backgroundColor: '#e0f2fe', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: '#7dd3fc' },
   sugTxt: { fontSize: 11, color: '#0369a1' },
