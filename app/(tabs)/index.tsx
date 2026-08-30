@@ -108,6 +108,7 @@ export default function HomeScreen() {
         value: Math.max(0, parseFloat((lastItem.value + (Math.random() * 2 - 1)).toFixed(1))),
         unit: 'mm',
         source: 'mock',
+        quality: 'mock',
       });
     }
     precip = mockPrecip;
@@ -164,11 +165,11 @@ export default function HomeScreen() {
               <CloudRain size={36} color="#1e293b" />
               <Text style={s.tempBig}>{current?.temp_c ?? '--'}<Text style={s.tempUnit}>°C</Text></Text>
             </View>
-            <Text style={s.skySubText}>{current?.sky_label || 'Clear'}, {current?.temp_max_c ? `High ${current.temp_max_c}°C` : ''}</Text>
+            <Text style={s.skySubText}>{current?.sky_label || 'Clear'}, {current?.humidity_pct ? `Humidity ${current.humidity_pct}%` : ''}</Text>
 
             <View style={s.statsGrid}>
-              <Text style={s.statLabel}>Visibility</Text>
-              <Text style={s.statValue}>{current?.visibility_km ?? '--'} km</Text>
+              <Text style={s.statLabel}>Wind</Text>
+              <Text style={s.statValue}>{current?.wind_ms ?? '--'} m/s {current?.wind_compass}</Text>
             </View>
             <View style={s.statsGrid}>
               <Text style={s.statLabel}>Rain this hour</Text>

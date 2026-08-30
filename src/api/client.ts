@@ -36,6 +36,8 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
   const timeoutMs = options?.timeout || 30000;
   
+  console.log(`[apiFetch] Fetching: ${url}`);
+  
   try {
     const res = await Promise.race([
       fetch(url, {
@@ -49,11 +51,23 @@ async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> 
         setTimeout(() => reject(new Error(`Request timeout (${timeoutMs}ms)`)), timeoutMs)
       ),
     ]);
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    if (!res.ok) {
+      let errorDetail = '';
+      try {
+        const errorJson = await res.json();
+        errorDetail = JSON.stringify(errorJson);
+      } catch {
+        errorDetail = res.statusText;
+      }
+      console.log(`[apiFetch] HTTP Error ${res.status} on ${url}: ${errorDetail}`);
+      throw new Error(`HTTP ${res.status}: ${errorDetail}`);
+    }
     lastDataSource = 'live';
-    return res.json();
+    const json = await res.json();
+    console.log(`[apiFetch] Success on ${url}`);
+    return json;
   } catch (err) {
-    console.error('apiFetch error for', url, ':', err);
+    console.error(`[apiFetch] Network/Parse error for ${url}:`, err);
     throw err;
   }
 }
