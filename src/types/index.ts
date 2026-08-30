@@ -362,3 +362,58 @@ export interface ChatResponse {
   events: any[];
   message: ChatMessage;
 }
+
+// ---------------------------------------------------------------------------
+// Map — GET /api/map/*
+// ---------------------------------------------------------------------------
+
+export interface MapLayer {
+  id: string;
+  label: string;
+  url?: string;
+  attribution?: string;
+  unit?: string;
+  source?: string;
+  type?: string;
+  path?: string;
+  layers?: string;
+  href?: string;
+}
+
+export interface MapLayersResponse {
+  basemaps: MapLayer[];
+  weather: MapLayer[];
+  overlays: MapLayer[];
+}
+
+export interface MapRadarTile {
+  time: number;
+  path: string;
+}
+
+export interface MapRadarResponse {
+  ok: boolean;
+  host: string;
+  radar: MapRadarTile[];
+  satellite: any[];
+  note?: string;
+}
+
+export interface MapWeatherGridResponse {
+  ok: boolean;
+  source: string;
+  note?: string;
+  scope: string;
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+  nx: number;
+  ny: number;
+  lats: number[];
+  lons: number[];
+  hour: number;
+  n: number;
+  fields: Record<string, number[]>;
+  products: string[];
+}

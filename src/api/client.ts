@@ -11,6 +11,9 @@ import {
   ChatResponse,
   GeoSearchResponse,
   BootstrapResponse,
+  MapLayersResponse,
+  MapRadarResponse,
+  MapWeatherGridResponse,
 } from '../types';
 
 import { useLocation } from '../context/LocationContext';
@@ -115,6 +118,25 @@ export async function postChat(body: ChatRequest): Promise<ChatResponse> {
 }
 
 // ---------------------------------------------------------------------------
+// Maps — GET /api/map/*
+// ---------------------------------------------------------------------------
+
+export async function getMapLayers(): Promise<MapLayersResponse> {
+  return apiFetch<MapLayersResponse>('/api/map/layers');
+}
+
+export async function getMapRadar(): Promise<MapRadarResponse> {
+  return apiFetch<MapRadarResponse>('/api/map/radar');
+}
+
+export async function getMapWeatherGrid(loc: Location, layer: string): Promise<MapWeatherGridResponse> {
+  // Use the global fallback location if loc doesn't have lat/lon
+  const lat = loc.lat ?? 22.0;
+  const lon = loc.lon ?? 88.0;
+  return apiFetch<MapWeatherGridResponse>(`/api/map/weather-grid?lat=${lat}&lon=${lon}&layer=${layer}`);
+}
+
+// ---------------------------------------------------------------------------
 // TanStack Query Hooks
 // ---------------------------------------------------------------------------
 
@@ -200,5 +222,34 @@ export function useGeoSearch(query: string) {
 export function useChatMutation() {
   return useMutation({
     mutationFn: postChat,
+  });
+}
+
+export function useMapLayers() {
+  return useQuery({
+    queryKey: ['mapLayers'],
+    queryFn: getMapLayers,
+    staleTime: 3600_000, // 1 hour
+    retry: 2,
+  });
+}
+
+export function useMapRadar() {
+  return useQuery({
+    queryKey: ['mapRadar'],
+    queryFn: getMapRadar,
+    staleTime: 300_000, // 5 mins
+    retry: 2,
+  });
+}
+
+export function useMapWeatherGrid(layer: string) {
+  const { location } = useLocation();
+  return useQuery({
+    queryKey: ['mapWeatherGrid', location.lat, location.lon, layer],
+    queryFn: () => getMapWeatherGrid(location, layer),
+    enabled: !!layer && layer !== 'none',
+    staleTime: 600_000, // 10 mins
+    retry: 2,
   });
 }
