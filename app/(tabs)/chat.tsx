@@ -50,7 +50,8 @@ export default function ChatScreen() {
     const history: ChatHistoryEntry[] = messages
       .filter(m => !m.isError)
       .slice(-6)
-      .map(m => ({
+      .map((m, idx) => ({
+        id: `hist-${Date.now()}-${idx}`,
         role: m.role === 'user' ? 'user' : 'assistant',
         content: m.content,
       }));
@@ -60,14 +61,6 @@ export default function ChatScreen() {
         message: text,
         locale_hint: currentLocale,
         output_locale: currentLocale,
-        location: {
-          id: location.id,
-          label: location.label,
-          state: location.state,
-          district: location.district,
-          lat: location.lat,
-          lon: location.lon,
-        },
         history,
         stream: false,
       });

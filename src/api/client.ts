@@ -22,11 +22,17 @@ const API_BASE = process.env.EXPO_PUBLIC_API_BASE || 'https://rituchakra-api.onr
 // ---------------------------------------------------------------------------
 export let lastDataSource: 'live' | 'fallback' | 'error' = 'live';
 
+interface ApiFetchOptions extends RequestInit {
+  timeout?: number;
+}
+
 // ---------------------------------------------------------------------------
-// Core fetcher — 8s timeout + JSON parse
+// Core fetcher
 // ---------------------------------------------------------------------------
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const timeoutMs = options?.timeout || 30000;
+  
   try {
     const res = await Promise.race([
       fetch(url, {
@@ -37,7 +43,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
         },
       }),
       new Promise<Response>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout (30s)')), 30000)
+        setTimeout(() => reject(new Error(`Request timeout (${timeoutMs}ms)`)), timeoutMs)
       ),
     ]);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -53,9 +59,13 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 // Location query builder
 // ---------------------------------------------------------------------------
 function locQuery(loc: Location): string {
-  const district = encodeURIComponent(loc.district || '');
-  const place = encodeURIComponent(loc.place_name || loc.label.split(',')[0] || '');
-  return `district=${district}&place=${place}&lat=${loc.lat}&lon=${loc.lon}`;
+  const params: string[] = [];
+  if (loc.district) params.push(`district=${encodeURIComponent(loc.district)}`);
+  const place = loc.place_name || loc.label.split(',')[0];
+  if (place) params.push(`place=${encodeURIComponent(place)}`);
+  if (loc.lat !== undefined) params.push(`lat=${loc.lat}`);
+  if (loc.lon !== undefined) params.push(`lon=${loc.lon}`);
+  return params.join('&');
 }
 
 // ---------------------------------------------------------------------------
@@ -63,35 +73,35 @@ function locQuery(loc: Location): string {
 // ---------------------------------------------------------------------------
 
 export async function getBootstrap(): Promise<BootstrapResponse> {
-  return apiFetch<BootstrapResponse>('/api/bootstrap');
+  return apiFetch<BootstrapResponse>('/app/v1/bootstrap');
 }
 
 export async function getDashboard(loc: Location): Promise<DashboardSnapshot> {
-  return apiFetch<DashboardSnapshot>(`/api/dashboard?${locQuery(loc)}`);
+  return apiFetch<DashboardSnapshot>(`/app/v1/dashboard?${locQuery(loc)}`);
 }
 
 export async function getAlerts(loc: Location): Promise<AlertsResponse> {
-  return apiFetch<AlertsResponse>(`/api/alerts?${locQuery(loc)}`);
+  return apiFetch<AlertsResponse>(`/app/v1/alerts?${locQuery(loc)}`);
 }
 
 export async function getNowcastLive(loc: Location): Promise<NowcastLiveResponse> {
-  return apiFetch<NowcastLiveResponse>(`/api/nowcast/live?${locQuery(loc)}`);
+  return apiFetch<NowcastLiveResponse>(`/app/v1/nowcast/live?${locQuery(loc)}`);
 }
 
 export async function getForecast(loc: Location): Promise<ForecastResponse> {
-  return apiFetch<ForecastResponse>(`/api/forecast?${locQuery(loc)}`);
+  return apiFetch<ForecastResponse>(`/app/v1/forecast?${locQuery(loc)}`);
 }
 
 export async function getRisks(loc: Location): Promise<RisksResponse> {
-  return apiFetch<RisksResponse>(`/api/risks?${locQuery(loc)}`);
+  return apiFetch<RisksResponse>(`/app/v1/risks?${locQuery(loc)}`);
 }
 
 export async function getMarket(loc: Location): Promise<MarketResponse> {
-  return apiFetch<MarketResponse>(`/api/market?${locQuery(loc)}`);
+  return apiFetch<MarketResponse>(`/app/v1/market?${locQuery(loc)}`);
 }
 
 export async function searchGeo(query: string): Promise<Location[]> {
-  const data = await apiFetch<GeoSearchResponse>(`/api/geo/search?q=${encodeURIComponent(query)}`);
+  const data = await apiFetch<GeoSearchResponse>(`/app/v1/geo/search?q=${encodeURIComponent(query)}`);
   return data.results || [];
 }
 
@@ -100,6 +110,7 @@ export async function postChat(body: ChatRequest): Promise<ChatResponse> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    timeout: 500000,
   });
 }
 

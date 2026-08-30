@@ -340,6 +340,7 @@ export interface ChatRequest {
 }
 
 export interface ChatHistoryEntry {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
 }
