@@ -142,6 +142,7 @@ export default function ChatScreen() {
         output_locale: currentLocaleOption.ietf,
         history,
         stream: false,
+        location,
       });
 
       const responseContent = response.message?.content || 'No response received.';
