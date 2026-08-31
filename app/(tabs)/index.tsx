@@ -40,7 +40,7 @@ function HourlyRainChart({ data }: { data: Array<{ t: string; value: number }> }
               {d.value > 0 ? '🌧️' : '☁️'}
             </SvgText>
             <SvgText x={x + barW / 2} y={y - 4} fontSize={9} fill="#475569" textAnchor="middle" fontWeight="600">
-              {d.value > 0 ? d.value.toFixed(1) : '0.0'}
+              {d.value > 0 ? d.value?.toFixed(1) ?? '0.0' : '0.0'}
             </SvgText>
 
             <Rect x={x} y={y} width={barW} height={barH} fill="#8bb3de" rx={4} />
@@ -97,7 +97,7 @@ export default function HomeScreen() {
     let baseHour = 12;
     if (lastItem.t.includes('T')) baseHour = parseInt(lastItem.t.split('T')[1].split(':')[0], 10);
     else if (lastItem.t.includes(' ')) baseHour = parseInt(lastItem.t.split(' ')[1].split(':')[0], 10);
-    
+
     const needed = 6 - precip.length;
     for (let i = 1; i <= needed; i++) {
       let h = (baseHour + i) % 24;
@@ -105,7 +105,7 @@ export default function HomeScreen() {
       const datePart = lastItem.t.includes('T') ? lastItem.t.split('T')[0] : lastItem.t.split(' ')[0];
       mockPrecip.push({
         t: `${datePart}T${hh}`,
-        value: Math.max(0, parseFloat((lastItem.value + (Math.random() * 2 - 1)).toFixed(1))),
+        value: Math.max(0, parseFloat(((lastItem.value ?? 0) + (Math.random() * 2 - 1)).toFixed(1))),
         unit: 'mm',
         source: 'mock',
         quality: 'mock',
@@ -119,7 +119,7 @@ export default function HomeScreen() {
     const lastItem = outlook[outlook.length - 1];
     const [y, m, d] = lastItem.date.split('-');
     const baseDate = new Date(Number(y), Number(m) - 1, Number(d));
-    
+
     const needed = 7 - outlook.length;
     for (let i = 1; i <= needed; i++) {
       const nextDate = new Date(baseDate.getTime() + i * 86400000);
@@ -129,8 +129,8 @@ export default function HomeScreen() {
       mockOutlook.push({
         ...lastItem,
         date: `${nextY}-${nextM}-${nextD}`,
-        temp_max_c: parseFloat((lastItem.temp_max_c + (Math.random() * 4 - 2)).toFixed(1)),
-        precip_mm: parseFloat((lastItem.precip_mm * Math.random()).toFixed(1)),
+        temp_max_c: parseFloat(((lastItem.temp_max_c ?? 0) + (Math.random() * 4 - 2)).toFixed(1)),
+        precip_mm: parseFloat(((lastItem.precip_mm ?? 0) * Math.random()).toFixed(1)),
       });
     }
     outlook = mockOutlook;
@@ -168,29 +168,26 @@ export default function HomeScreen() {
             <Text style={s.skySubText}>{current?.sky_label || 'Clear'}, {current?.humidity_pct ? `Humidity ${current.humidity_pct}%` : ''}</Text>
 
             <View style={s.statsGrid}>
-              <Text style={s.statLabel}>Wind</Text>
-              <Text style={s.statValue}>{current?.wind_ms ?? '--'} m/s {current?.wind_compass}</Text>
+              <Text style={s.statLabel}></Text>
+              <Text style={s.statValue}>{current?.wind_ms?.toFixed(2) ?? '--'} m/s {current?.wind_compass}</Text>
             </View>
             <View style={s.statsGrid}>
-              <Text style={s.statLabel}>Rain this hour</Text>
+              <Text style={s.statLabel}>Rain this hour:</Text>
               <Text style={s.statValue}>{current?.precip_1h_mm ?? 0} mm</Text>
             </View>
           </View>
 
           {/* Rainfall Card */}
           <View style={[s.topCard, s.rainCardBg]}>
-            <Text style={s.cardTitle}>Today's Rainfall</Text>
+            <Text style={s.cardTitle}>Probability of rain today</Text>
             <View style={s.tempRow}>
-              <Text style={s.tempBig}>{todayRainfall.toFixed(1)}<Text style={s.tempUnit}> mm</Text></Text>
+              <Text style={s.tempBig}>{outlook[0]?.precip_prob_pct ?? 0}<Text style={s.tempUnit}> %</Text></Text>
               <CloudRain size={32} color="#1e293b" style={{ marginLeft: 'auto' }} />
             </View>
 
-            <Text style={[s.cardTitle, { marginTop: 16, fontSize: 13 }]}>Probability</Text>
+            <Text style={[s.cardTitle, { marginTop: 16, fontSize: 13 }]}>Today's Rainfall</Text>
             <View style={s.probRow}>
-              <Text style={s.statLabel}>Day1 </Text>
-              <Text style={s.statValueBold}>{outlook[0]?.precip_prob_pct ?? 0}%, </Text>
-              <Text style={s.statLabel}>Day2 </Text>
-              <Text style={s.statValueBold}>{outlook[1]?.precip_prob_pct ?? 0}%</Text>
+              <Text style={s.statValueBold}>{todayRainfall?.toFixed(1) ?? '0.0'} mm</Text>
             </View>
           </View>
         </View>
@@ -245,7 +242,7 @@ export default function HomeScreen() {
                     <View style={s.dayIcon}>
                       {day.precip_mm > 0 ? <CloudRain size={24} color="#1e293b" /> : <Sun size={24} color="#1e293b" />}
                     </View>
-                    <Text style={s.dayTemp}>{day.temp_max_c.toFixed(1)}°C</Text>
+                    <Text style={s.dayTemp}>{day.temp_max_c?.toFixed(1) ?? '--'}°C</Text>
                     <Text style={s.dayTempSub}>High/low</Text>
                   </View>
                 );

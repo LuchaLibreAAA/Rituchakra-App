@@ -215,12 +215,12 @@ export default function AnalyticsScreen() {
       mockOutlook.push({
         ...lastItem,
         date: `${nextY}-${nextM}-${nextD}`,
-        temp_max_c: parseFloat((lastItem.temp_max_c + (Math.random() * 4 - 2)).toFixed(1)),
-        temp_min_c: parseFloat((lastItem.temp_min_c + (Math.random() * 2 - 1)).toFixed(1)),
-        precip_mm: parseFloat((lastItem.precip_mm * Math.random()).toFixed(1)),
-        et0_mm: parseFloat((lastItem.et0_mm + (Math.random() * 1 - 0.5)).toFixed(1)),
-        soil_m3m3: Math.max(0, parseFloat((lastItem.soil_m3m3 + (Math.random() * 0.1 - 0.05)).toFixed(2))),
-        water_balance_mm: parseFloat((lastItem.water_balance_mm + (Math.random() * 10 - 5)).toFixed(1)),
+        temp_max_c: parseFloat(((lastItem.temp_max_c ?? 0) + (Math.random() * 4 - 2)).toFixed(1)),
+        temp_min_c: parseFloat(((lastItem.temp_min_c ?? 0) + (Math.random() * 2 - 1)).toFixed(1)),
+        precip_mm: parseFloat(((lastItem.precip_mm ?? 0) * Math.random()).toFixed(1)),
+        et0_mm: parseFloat(((lastItem.et0_mm ?? 0) + (Math.random() * 1 - 0.5)).toFixed(1)),
+        soil_m3m3: Math.max(0, parseFloat(((lastItem.soil_m3m3 ?? 0) + (Math.random() * 0.1 - 0.05)).toFixed(2))),
+        water_balance_mm: parseFloat(((lastItem.water_balance_mm ?? 0) + (Math.random() * 10 - 5)).toFixed(1)),
         precip_prob_pct: Math.floor(Math.random() * 100),
       });
     }
@@ -277,13 +277,13 @@ export default function AnalyticsScreen() {
               {outlook.map((day, i) => (
                 <View key={i} style={[s.tableRow, { paddingVertical: 10, borderBottomWidth: i === outlook.length - 1 ? 0 : 1, borderBottomColor: '#f1f5f9' }]}>
                   <Text style={[s.td, { flex: 1.5, fontWeight: '600', color: '#1e293b' }]}>{day.date}</Text>
-                  <Text style={s.td}>{day.precip_mm.toFixed(1)} mm</Text>
+                  <Text style={s.td}>{day.precip_mm?.toFixed(1) ?? '--'} mm</Text>
                   <Text style={s.td}>{day.precip_prob_pct}%</Text>
-                  <Text style={s.td}>{day.temp_max_c.toFixed(1)} °C</Text>
-                  <Text style={s.td}>{day.et0_mm.toFixed(1)} mm</Text>
-                  <Text style={s.td}>{day.soil_m3m3.toFixed(2)}</Text>
+                  <Text style={s.td}>{day.temp_max_c?.toFixed(1) ?? '--'} °C</Text>
+                  <Text style={s.td}>{day.et0_mm?.toFixed(1) ?? '--'} mm</Text>
+                  <Text style={s.td}>{day.soil_m3m3?.toFixed(2) ?? '--'}</Text>
                   <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={s.td}>{day.water_balance_mm.toFixed(1)} mm</Text>
+                    <Text style={s.td}>{day.water_balance_mm?.toFixed(1) ?? '--'} mm</Text>
                     {day.flood_watch && (
                       <View style={s.floodTag}>
                         <Text style={s.floodTagText}>FLOOD WATCH</Text>
