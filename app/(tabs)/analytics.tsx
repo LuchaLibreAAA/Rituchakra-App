@@ -39,7 +39,7 @@ function XAxis({ dates, H }: { dates: string[], H: number }) {
       <Line x1={X_OFF} y1={H} x2={INNER_W} y2={H} stroke="#94a3b8" strokeWidth={1} />
       {dates.map((d, i) => (
         <SvgText key={i} x={X_OFF + i * step + step / 2} y={H + 12} fontSize={7.5} fill="#64748b" textAnchor="middle">
-          {d}
+          {d.slice(-2)}
         </SvgText>
       ))}
     </G>
