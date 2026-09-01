@@ -41,7 +41,7 @@
 | **Home** | `app/(tabs)/index.tsx` | Sky temp, Rain prob, CAP Hazards, Mandi rates | SVG Bar Charts, Alert Cards, Commodity Grid | ✅ 100% |
 | **Analytics** | `app/(tabs)/analytics.tsx` | 7-day forecast, FAO-56 $ET_0$, Soil moisture | 4 SVG Analytic Charts, Summary Table, Flood Badges | ✅ 100% |
 | **Data** | `app/(tabs)/data.tsx` | IMD-CAP, GloFAS hydrology, Market prices, AQI | Alerts Grid, Actions Checklist, Market Table & Bar Chart | ✅ 100% |
-| **Maps** | `app/(tabs)/maps.tsx` | Station telemetry, Regional radars, River basins | Stylized map canvas, District focus | ✅ 100% |
+| **Maps** | `app/(tabs)/maps.tsx` | Station telemetry, Regional radars, River basins | API-less Leaflet map via WebView, Rainviewer, Bhuvan WMS | ✅ 100% |
 | **Advisor** | `app/(tabs)/chat.tsx` | Multi-agent agro LLM, Official scientific sources | Central Card UI, Speech bubbles, Preset pills | ✅ 100% |
 
 
@@ -65,6 +65,8 @@
 
 ### 🗺️ 4. 🧭 Hyperlocal Geospatial Map (`/maps`)
 * Visual regional hazard maps, satellite radar overlays, and district-level weather station mapping.
+* Features a robust **API-less Maps Framework** using **Leaflet.js** sandboxed inside a React Native `WebView`, which eliminates Google Maps API key requirements and guarantees zero native mapping crashes on Android.
+* OpenStreetMap basemaps with custom WMS overlay support (ISRO Bhuvan Geomorphology) and live global radar tiles (Rainviewer).
 
 ### 🤖 5. 💬 Multilingual AI Agro-Advisor (`/chat`)
 * **Seamless Language Switcher**: Switch on-the-fly between **English**, **हिंदी (Hindi)**, and **বাংলা (Bengali)** via pill toggles.
@@ -123,7 +125,7 @@ rituchakra-mobile/
 │       ├── 📄 _layout.tsx      # Bottom Tab Bar configuration & Lucide icons
 │       ├── 📄 index.tsx        # Home Screen (Sky, Warnings, Mandi Market)
 │       ├── 📄 analytics.tsx    # Storm Matrix & Kalman Chart Screen
-│       ├── 📄 maps.tsx         # Geospatial Map View Screen
+│       ├── 📄 maps.tsx         # Geospatial Map View Screen (Leaflet WebView)
 │       ├── 📄 data.tsx         # 7-Day Forecast, ET₀ & Soil Water Balance
 │       └── 📄 chat.tsx         # Multilingual AI Advisor Screen
 ├── 📁 src/
@@ -134,12 +136,6 @@ rituchakra-mobile/
 │   ├── 📁 i18n/                # Multi-language internationalization
 │   │   └── 📄 index.ts         # English, Hindi, and Bengali translation keys
 │   ├── 📁 mocks/               # Domain Mock Fixtures
-│   │   ├── 📄 analytics.mock.ts
-│   │   ├── 📄 chat.mock.ts
-│   │   ├── 📄 dashboard.mock.ts
-│   │   ├── 📄 forecast.mock.ts
-│   │   ├── 📄 geo.mock.ts
-│   │   └── 📄 market.mock.ts
 │   ├── 📁 theme/               # Design Tokens & Palette
 │   │   └── 📄 tokens.ts        # Colors, Typography, Spacing, Elevation
 │   └── 📁 types/               # TypeScript Domain Interfaces
@@ -160,6 +156,7 @@ rituchakra-mobile/
 * **Iconography**: [lucide-react-native](https://lucide.dev/)
 * **Localization**: [i18next](https://www.i18next.com/) & [react-i18next](https://react.i18next.com/)
 * **Safe Area Handling**: [react-native-safe-area-context](https://github.com/th3rdwave/react-native-safe-area-context)
+* **Map Framework**: [react-native-webview](https://github.com/react-native-webview/react-native-webview) rendering API-less [Leaflet.js](https://leafletjs.com/)
 
 ---
 
@@ -191,10 +188,10 @@ EXPO_PUBLIC_USE_MOCKS=true
 npx expo start -c
 
 # Run on Android emulator / device
-npx expo start --android
+npm run android
 
 # Run on iOS simulator / device
-npx expo start --ios
+npm run ios
 
 # Run on Web browser
 npx expo start --web
