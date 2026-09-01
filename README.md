@@ -176,7 +176,7 @@ npm install
 ### 3. Configure Environment Variables
 Create a `.env` file in the root directory:
 ```env
-EXPO_PUBLIC_API_BASE=https://api.rituchakra.in
+EXPO_PUBLIC_API_BASE=https://api.domain.com
 EXPO_PUBLIC_DEFAULT_LAT=22.0667
 EXPO_PUBLIC_DEFAULT_LON=88.0698
 EXPO_PUBLIC_USE_MOCKS=true
