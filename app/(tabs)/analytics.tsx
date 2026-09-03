@@ -5,6 +5,8 @@ import { useForecastData, useDashboard } from '../../src/api/client';
 import { useLocation } from '../../src/context/LocationContext';
 import { LocationPicker } from '../../src/components/LocationPicker';
 import { Search, MapPin, Star, AlertTriangle } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
+import { localizeNumber } from '../../src/utils/localize';
 import Svg, { Rect, Line, Polyline, Circle, Text as SvgText, G } from 'react-native-svg';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -175,6 +177,8 @@ function HourlyChart({ data }: { data: any[] }) {
 // Main Analytics Screen
 // ---------------------------------------------------------------------------
 export default function AnalyticsScreen() {
+  const { t, i18n } = useTranslation();
+  const lng = i18n.language;
   const { data: forecast, isLoading: loadF, error: errF } = useForecastData();
   const { data: dashboard, isLoading: loadD } = useDashboard();
   const { location } = useLocation();
@@ -184,7 +188,7 @@ export default function AnalyticsScreen() {
     return (
       <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
         <ActivityIndicator size="large" color="#0ea5e9" />
-        <Text style={s.loadingText}>Loading analytics…</Text>
+        <Text style={s.loadingText}>{t('loadingLiveData')}</Text>
       </View>
     );
   }
@@ -193,7 +197,7 @@ export default function AnalyticsScreen() {
     return (
       <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
         <AlertTriangle size={32} color="#ef4444" />
-        <Text style={s.errorText}>Failed to load analytics</Text>
+        <Text style={s.errorText}>{t('failedToLoadData')}</Text>
       </View>
     );
   }
@@ -236,7 +240,7 @@ export default function AnalyticsScreen() {
       {/* ── Mockup Header ── */}
       <View style={s.headerContainer}>
         <TouchableOpacity style={s.searchBar} onPress={() => setIsLocationPickerVisible(true)}>
-          <Text style={s.searchText}>Search city, town or district...</Text>
+          <Text style={s.searchText}>{t('searchPlaceholder')}</Text>
         </TouchableOpacity>
         <View style={s.locationRow}>
           <MapPin size={18} color="#1e3a8a" />
@@ -249,14 +253,14 @@ export default function AnalyticsScreen() {
 
         {/* ── Forecast Data Table Card ── */}
         <View style={s.tableCard}>
-          <Text style={s.cardTitle}>Forecast</Text>
+          <Text style={s.cardTitle}>{t('sevenDayForecast')}</Text>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
             <View style={s.pillRow}>
-              <View style={s.pill}><Text style={s.pillText}>RAIN 7D: {predictive?.precip_7d_mm?.toFixed(1) ?? '--'} MM</Text></View>
-              <View style={s.pill}><Text style={s.pillText}>WATER BALANCE: {predictive?.water_balance_7d_mm?.toFixed(1) ?? '--'} MM</Text></View>
-              <View style={s.pill}><Text style={s.pillText}>IRRIGATE: {predictive?.irrigate_dates?.length ?? 0}</Text></View>
-              <View style={s.pill}><Text style={s.pillText}>FLOOD DAYS: {predictive?.flood_watch_dates?.length ?? 0}</Text></View>
+              <View style={s.pill}><Text style={s.pillText}>{t('rain7d')}: {localizeNumber(predictive?.precip_7d_mm?.toFixed(1) ?? '--', lng)} {t('unitMm').toUpperCase()}</Text></View>
+              <View style={s.pill}><Text style={s.pillText}>{t('waterBalance')}: {localizeNumber(predictive?.water_balance_7d_mm?.toFixed(1) ?? '--', lng)} {t('unitMm').toUpperCase()}</Text></View>
+              <View style={s.pill}><Text style={s.pillText}>{t('irrigate')}: {localizeNumber(predictive?.irrigate_dates?.length ?? 0, lng)}</Text></View>
+              <View style={s.pill}><Text style={s.pillText}>{t('floodDays')}: {localizeNumber(predictive?.flood_watch_dates?.length ?? 0, lng)}</Text></View>
             </View>
           </ScrollView>
 
@@ -264,29 +268,29 @@ export default function AnalyticsScreen() {
             <View style={{ minWidth: 500, paddingBottom: 8 }}>
               {/* Table Header */}
               <View style={[s.tableRow, { borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 8 }]}>
-                <Text style={[s.th, { flex: 1.5 }]}>Date</Text>
-                <Text style={s.th}>Rain (mm)</Text>
-                <Text style={s.th}>Prob. (%)</Text>
-                <Text style={s.th}>Tmax (°C)</Text>
-                <Text style={s.th}>ET₀ (mm)</Text>
-                <Text style={s.th}>Soil (m³/m²)</Text>
-                <Text style={s.th}>WB (mm)</Text>
+                <Text style={[s.th, { flex: 1.5 }]}>{t('date')}</Text>
+                <Text style={s.th}>{t('rainMm')}</Text>
+                <Text style={s.th}>{t('probPct')}</Text>
+                <Text style={s.th}>{t('tmaxC')}</Text>
+                <Text style={s.th}>{t('et0Mm')}</Text>
+                <Text style={s.th}>{t('soilM3')}</Text>
+                <Text style={s.th}>{t('wbMm')}</Text>
               </View>
 
               {/* Table Rows */}
               {outlook.map((day, i) => (
                 <View key={i} style={[s.tableRow, { paddingVertical: 10, borderBottomWidth: i === outlook.length - 1 ? 0 : 1, borderBottomColor: '#f1f5f9' }]}>
-                  <Text style={[s.td, { flex: 1.5, fontWeight: '600', color: '#1e293b' }]}>{day.date}</Text>
-                  <Text style={s.td}>{day.precip_mm?.toFixed(1) ?? '--'} mm</Text>
-                  <Text style={s.td}>{day.precip_prob_pct}%</Text>
-                  <Text style={s.td}>{day.temp_max_c?.toFixed(1) ?? '--'} °C</Text>
-                  <Text style={s.td}>{day.et0_mm?.toFixed(1) ?? '--'} mm</Text>
-                  <Text style={s.td}>{day.soil_m3m3?.toFixed(2) ?? '--'}</Text>
+                  <Text style={[s.td, { flex: 1.5, fontWeight: '600', color: '#1e293b' }]}>{localizeNumber(day.date, lng)}</Text>
+                  <Text style={s.td}>{localizeNumber(day.precip_mm?.toFixed(1) ?? '--', lng)} {t('unitMm')}</Text>
+                  <Text style={s.td}>{localizeNumber(day.precip_prob_pct, lng)}{t('unitPct')}</Text>
+                  <Text style={s.td}>{localizeNumber(day.temp_max_c?.toFixed(1) ?? '--', lng)} {t('unitC')}</Text>
+                  <Text style={s.td}>{localizeNumber(day.et0_mm?.toFixed(1) ?? '--', lng)} {t('unitMm')}</Text>
+                  <Text style={s.td}>{localizeNumber(day.soil_m3m3?.toFixed(2) ?? '--', lng)}</Text>
                   <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={s.td}>{day.water_balance_mm?.toFixed(1) ?? '--'} mm</Text>
+                    <Text style={s.td}>{localizeNumber(day.water_balance_mm?.toFixed(1) ?? '--', lng)} {t('unitMm')}</Text>
                     {day.flood_watch && (
                       <View style={s.floodTag}>
-                        <Text style={s.floodTagText}>FLOOD WATCH</Text>
+                        <Text style={s.floodTagText}>{t('floodWatch')}</Text>
                       </View>
                     )}
                   </View>
@@ -300,19 +304,19 @@ export default function AnalyticsScreen() {
         {outlook.length > 0 && (
           <View style={s.gridContainer}>
             <View style={s.gridItem}>
-              <Text style={s.chartTitle}>RAIN / ET₀</Text>
+              <Text style={s.chartTitle}>{t('rainEt0')}</Text>
               <RainEt0Chart data={outlook} />
             </View>
             <View style={s.gridItem}>
-              <Text style={s.chartTitle}>°C</Text>
+              <Text style={s.chartTitle}>{t('celsius')}</Text>
               <TempChart data={outlook} />
             </View>
             <View style={s.gridItem}>
-              <Text style={s.chartTitle}>SOIL + PROBABILITY</Text>
+              <Text style={s.chartTitle}>{t('soilProbability')}</Text>
               <SoilProbChart data={outlook} />
             </View>
             <View style={s.gridItem}>
-              <Text style={s.chartTitle}>HOURLY</Text>
+              <Text style={s.chartTitle}>{t('hourly')}</Text>
               <HourlyChart data={outlook} />
             </View>
           </View>

@@ -3,6 +3,7 @@ import { View, Text, TextInput, Modal, TouchableOpacity, FlatList, ActivityIndic
 import { X, MapPin, Search } from 'lucide-react-native';
 import { useGeoSearch } from '../api/client';
 import { useLocation } from '../context/LocationContext';
+import { useTranslation } from 'react-i18next';
 import { Location } from '../types';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function LocationPicker({ visible, onClose }: Props) {
+  const { t } = useTranslation();
   const { setLocation } = useLocation();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -35,7 +37,7 @@ export function LocationPicker({ visible, onClose }: Props) {
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
       <SafeAreaView style={s.safe}>
         <View style={s.header}>
-          <Text style={s.title}>Change Location</Text>
+          <Text style={s.title}>{t('changeLocation')}</Text>
           <TouchableOpacity onPress={onClose} style={s.closeBtn}>
             <X color="#64748b" size={24} />
           </TouchableOpacity>
@@ -45,7 +47,7 @@ export function LocationPicker({ visible, onClose }: Props) {
           <Search color="#94a3b8" size={20} />
           <TextInput
             style={s.input}
-            placeholder="Search city, town, or district in India..."
+            placeholder={t('searchLocations')}
             placeholderTextColor="#94a3b8"
             value={query}
             onChangeText={setQuery}
@@ -66,13 +68,13 @@ export function LocationPicker({ visible, onClose }: Props) {
 
         {isError && (
           <View style={s.center}>
-            <Text style={s.errorTxt}>Failed to search locations</Text>
+            <Text style={s.errorTxt}>{t('failedToSearch')}</Text>
           </View>
         )}
 
         {!isLoading && !isError && results && results.length === 0 && debouncedQuery.length > 2 && (
           <View style={s.center}>
-            <Text style={s.emptyTxt}>No locations found</Text>
+            <Text style={s.emptyTxt}>{t('noLocationsFound')}</Text>
           </View>
         )}
 

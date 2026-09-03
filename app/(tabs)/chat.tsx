@@ -209,10 +209,10 @@ export default function ChatScreen() {
           </View>
           <View style={cs.actionGroup}>
             <TouchableOpacity style={cs.topBtn} onPress={() => setMessages([])}>
-              <Text style={cs.topBtnTxt}>Clear chat</Text>
+              <Text style={cs.topBtnTxt}>{t('clearChat')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={cs.topBtn} onPress={() => {}}>
-              <Text style={cs.topBtnTxt}>Regenerate</Text>
+              <Text style={cs.topBtnTxt}>{t('regenerate')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -229,7 +229,7 @@ export default function ChatScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={cs.emptyTitle}>Choose a preset...</Text>
+                <Text style={cs.emptyTitle}>{t('choosePreset')}</Text>
               </View>
             )}
 
@@ -309,19 +309,19 @@ export default function ChatScreen() {
                 onSubmitEditing={() => sendMessage(input)}
               />
               <TouchableOpacity style={cs.sendBtn} onPress={() => sendMessage(input)} disabled={chatMutation.isPending || !input.trim()}>
-                <Text style={cs.sendBtnTxt}>Send</Text>
+                <Text style={cs.sendBtnTxt}>{t('send')}</Text>
               </TouchableOpacity>
             </View>
             
             <View style={cs.checkboxRow}>
               <View style={cs.checkbox} />
-              <Text style={cs.checkboxTxt}>English source</Text>
+              <Text style={cs.checkboxTxt}>{t('englishSource')}</Text>
             </View>
 
             <View style={cs.sourcesCard}>
               <View>
-                <Text style={cs.sourcesTitle}>Sources</Text>
-                <Text style={cs.sourcesSub}>Open for official names and methods.</Text>
+                <Text style={cs.sourcesTitle}>{t('sources')}</Text>
+                <Text style={cs.sourcesSub}>{t('sourcesSub')}</Text>
               </View>
               <Plus size={20} color="#0f172a" />
             </View>

@@ -6,8 +6,10 @@ import { Layers, X, MapPin } from 'lucide-react-native';
 import { useLocation } from '../../src/context/LocationContext';
 import { useMapLayers, useMapRadar } from '../../src/api/client';
 import { MapLayer } from '../../src/types';
+import { useTranslation } from 'react-i18next';
 
 export default function MapsScreen() {
+  const { t } = useTranslation();
   const { location } = useLocation();
   const { data: layersData } = useMapLayers();
   const { data: radarData } = useMapRadar();
@@ -56,7 +58,7 @@ export default function MapsScreen() {
       if (typeof updateLayers === 'function') {
         updateLayers(
           "${basemapUrl}", 
-          ${radarUrl ? \`"\${radarUrl}"\` : 'null'}, 
+          ${radarUrl ? JSON.stringify(radarUrl) : 'null'}, 
           ${overlay ? JSON.stringify(overlay) : 'null'}
         );
       }
@@ -165,20 +167,20 @@ export default function MapsScreen() {
         <View style={s.modalOverlay}>
           <View style={s.modalContent}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Map Layers</Text>
+              <Text style={s.modalTitle}>{t('mapLayers')}</Text>
               <TouchableOpacity onPress={() => setLayersMenuVisible(false)} style={s.closeBtn}>
                 <X color="#475569" size={24} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               
-              <Text style={s.sectionTitle}>Basemap</Text>
+              <Text style={s.sectionTitle}>{t('basemap')}</Text>
               <View style={s.grid}>
                 <TouchableOpacity 
                   style={[s.layerBtn, !selectedBasemap && s.layerBtnActive]} 
                   onPress={() => setSelectedBasemap(null)}
                 >
-                  <Text style={[s.layerTxt, !selectedBasemap && s.layerTxtActive]}>Default (Street)</Text>
+                  <Text style={[s.layerTxt, !selectedBasemap && s.layerTxtActive]}>{t('defaultStreet')}</Text>
                 </TouchableOpacity>
                 {layersData?.basemaps?.map(b => (
                   <TouchableOpacity 
@@ -191,13 +193,13 @@ export default function MapsScreen() {
                 ))}
               </View>
 
-              <Text style={s.sectionTitle}>Weather (Rainviewer)</Text>
+              <Text style={s.sectionTitle}>{t('weatherRainviewer')}</Text>
               <View style={s.grid}>
                 <TouchableOpacity 
                   style={[s.layerBtn, !selectedWeather && s.layerBtnActive]} 
                   onPress={() => setSelectedWeather(null)}
                 >
-                  <Text style={[s.layerTxt, !selectedWeather && s.layerTxtActive]}>None</Text>
+                  <Text style={[s.layerTxt, !selectedWeather && s.layerTxtActive]}>{t('none')}</Text>
                 </TouchableOpacity>
                 {layersData?.weather?.filter(w => w.id === 'radar').map(w => (
                   <TouchableOpacity 
@@ -210,13 +212,13 @@ export default function MapsScreen() {
                 ))}
               </View>
 
-              <Text style={s.sectionTitle}>Overlays (WMS)</Text>
+              <Text style={s.sectionTitle}>{t('overlaysWms')}</Text>
               <View style={s.grid}>
                 <TouchableOpacity 
                   style={[s.layerBtn, !selectedOverlay && s.layerBtnActive]} 
                   onPress={() => setSelectedOverlay(null)}
                 >
-                  <Text style={[s.layerTxt, !selectedOverlay && s.layerTxtActive]}>None</Text>
+                  <Text style={[s.layerTxt, !selectedOverlay && s.layerTxtActive]}>{t('none')}</Text>
                 </TouchableOpacity>
                 {layersData?.overlays?.map(o => (
                   <TouchableOpacity 
