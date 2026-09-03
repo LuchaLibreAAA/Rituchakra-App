@@ -5,6 +5,10 @@ import { CloudRain, AlertTriangle, Droplets, Wind, Thermometer, Search, Star, Cl
 import { useDashboard, useAlerts, useForecastData } from '../../src/api/client';
 import { useLocation } from '../../src/context/LocationContext';
 import { LocationPicker } from '../../src/components/LocationPicker';
+import { LanguageSwitcher } from '../../src/components/LanguageSwitcher';
+import { TranslatedText } from '../../src/components/TranslatedText';
+import { useTranslation } from 'react-i18next';
+import { localizeNumber, localizeDayName, localizeDynamicText } from '../../src/utils/localize';
 import Svg, { Rect, Text as SvgText, Line, G, Path } from 'react-native-svg';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -13,6 +17,8 @@ const { width: SCREEN_W } = Dimensions.get('window');
 // Hourly Rain Bar Chart
 // ---------------------------------------------------------------------------
 function HourlyRainChart({ data }: { data: Array<{ t: string; value: number }> }) {
+  const { i18n } = useTranslation();
+  const lng = i18n.language;
   const chartW = SCREEN_W - 64;
   const chartH = 80;
   const maxRain = Math.max(...data.map(d => d.value), 1);
@@ -40,13 +46,13 @@ function HourlyRainChart({ data }: { data: Array<{ t: string; value: number }> }
               {d.value > 0 ? '🌧️' : '☁️'}
             </SvgText>
             <SvgText x={x + barW / 2} y={y - 4} fontSize={9} fill="#475569" textAnchor="middle" fontWeight="600">
-              {d.value > 0 ? d.value?.toFixed(1) ?? '0.0' : '0.0'}
+              {d.value > 0 ? localizeNumber(d.value?.toFixed(1) ?? '0.0', lng) : localizeNumber('0.0', lng)}
             </SvgText>
 
             <Rect x={x} y={y} width={barW} height={barH} fill="#8bb3de" rx={4} />
 
             <SvgText x={x + barW / 2} y={chartH + 34} fontSize={10} fill="#475569" textAnchor="middle">
-              {hour}
+              {localizeNumber(hour, lng)}
             </SvgText>
           </G>
         );
@@ -60,6 +66,8 @@ function HourlyRainChart({ data }: { data: Array<{ t: string; value: number }> }
 // Main Home Screen
 // ---------------------------------------------------------------------------
 export default function HomeScreen() {
+  const { t, i18n } = useTranslation();
+  const lng = i18n.language;
   const { data: dashboard, isLoading: loadingDash, error: dashErr } = useDashboard();
   const { data: alerts } = useAlerts();
   const { data: forecast } = useForecastData();
@@ -70,7 +78,7 @@ export default function HomeScreen() {
     return (
       <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
         <ActivityIndicator size="large" color="#0369a1" />
-        <Text style={s.loadingText}>Loading live data…</Text>
+        <Text style={s.loadingText}>{t('loadingLiveData')}</Text>
       </View>
     );
   }
@@ -79,7 +87,7 @@ export default function HomeScreen() {
     return (
       <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
         <AlertTriangle size={32} color="#ef4444" />
-        <Text style={s.errorText}>Failed to load data</Text>
+        <Text style={s.errorText}>{t('failedToLoadData')}</Text>
       </View>
     );
   }
@@ -149,6 +157,7 @@ export default function HomeScreen() {
           <Search size={18} color="#475569" />
           <Text style={s.locationPillText} numberOfLines={1}>{location.label}</Text>
         </TouchableOpacity>
+        <LanguageSwitcher />
         <TouchableOpacity style={s.starBtn}>
           <Star size={24} color="#fbbf24" fill="#fbbf24" />
         </TouchableOpacity>
@@ -160,34 +169,34 @@ export default function HomeScreen() {
         <View style={s.splitCardsRow}>
           {/* Sky Card */}
           <View style={[s.topCard, s.skyCardBg]}>
-            <Text style={s.cardTitle}>Sky</Text>
+            <Text style={s.cardTitle}>{t('sky')}</Text>
             <View style={s.tempRow}>
               <CloudRain size={36} color="#1e293b" />
-              <Text style={s.tempBig}>{current?.temp_c ?? '--'}<Text style={s.tempUnit}>°C</Text></Text>
+              <Text style={s.tempBig}>{localizeNumber(current?.temp_c ?? '--', lng)}<Text style={s.tempUnit}>{t('unitC')}</Text></Text>
             </View>
-            <Text style={s.skySubText}>{current?.sky_label || 'Clear'}, {current?.humidity_pct ? `Humidity ${current.humidity_pct}%` : ''}</Text>
+            <Text style={s.skySubText}>{current?.sky_label ? t(current.sky_label.toLowerCase().replace(' ', '_')) : t('clear')}, {current?.humidity_pct ? `${t('humidity')} ${localizeNumber(current.humidity_pct, lng)}%` : ''}</Text>
 
             <View style={s.statsGrid}>
               <Text style={s.statLabel}></Text>
-              <Text style={s.statValue}>{current?.wind_ms?.toFixed(2) ?? '--'} m/s {current?.wind_compass}</Text>
+              <Text style={s.statValue}>{localizeNumber(current?.wind_ms?.toFixed(2) ?? '--', lng)} {t('unitMs')} {current?.wind_compass}</Text>
             </View>
             <View style={s.statsGrid}>
-              <Text style={s.statLabel}>Rain this hour:</Text>
-              <Text style={s.statValue}>{current?.precip_1h_mm ?? 0} mm</Text>
+              <Text style={s.statLabel}>{t('rainThisHour')}:</Text>
+              <Text style={s.statValue}>{localizeNumber(current?.precip_1h_mm ?? 0, lng)} {t('unitMm')}</Text>
             </View>
           </View>
 
           {/* Rainfall Card */}
           <View style={[s.topCard, s.rainCardBg]}>
-            <Text style={s.cardTitle}>Probability of rain today</Text>
+            <Text style={s.cardTitle}>{t('probabilityOfRainToday')}</Text>
             <View style={s.tempRow}>
-              <Text style={s.tempBig}>{outlook[0]?.precip_prob_pct ?? 0}<Text style={s.tempUnit}> %</Text></Text>
+              <Text style={s.tempBig}>{localizeNumber(outlook[0]?.precip_prob_pct ?? 0, lng)}<Text style={s.tempUnit}> {t('unitPct')}</Text></Text>
               <CloudRain size={32} color="#1e293b" style={{ marginLeft: 'auto' }} />
             </View>
 
-            <Text style={[s.cardTitle, { marginTop: 16, fontSize: 13 }]}>Today's Rainfall</Text>
+            <Text style={[s.cardTitle, { marginTop: 16, fontSize: 13 }]}>{t('todaysRainfall')}</Text>
             <View style={s.probRow}>
-              <Text style={s.statValueBold}>{todayRainfall?.toFixed(1) ?? '0.0'} mm</Text>
+              <Text style={s.statValueBold}>{localizeNumber(todayRainfall?.toFixed(1) ?? '0.0', lng)} {t('unitMm')}</Text>
             </View>
           </View>
         </View>
@@ -197,7 +206,7 @@ export default function HomeScreen() {
           <View style={[s.cardWrapper, s.warningCardBorder, { marginBottom: 16 }]}>
             <View style={s.warningHeaderRow}>
               <AlertTriangle size={20} color="#dc2626" />
-              <Text style={s.warningTitleMain}>High Risk Warning</Text>
+              <Text style={s.warningTitleMain}>{t('highRiskWarning')}</Text>
             </View>
 
             {warnings.map((w, i) => (
@@ -206,8 +215,8 @@ export default function HomeScreen() {
                   <AlertTriangle size={36} color="#ef4444" />
                 </View>
                 <View style={s.warningContent}>
-                  <Text style={s.warningItemTitle}>{w.title}</Text>
-                  <Text style={s.warningItemBody}>{w.body}</Text>
+                  <TranslatedText style={s.warningItemTitle} text={w.title} locName={location.label} />
+                  <TranslatedText style={s.warningItemBody} text={w.body} locName={location.label} />
                 </View>
               </View>
             ))}
@@ -216,25 +225,25 @@ export default function HomeScreen() {
 
         {/* ── Next 6 Hours Chart ── */}
         <View style={[s.cardWrapper, s.hourlyCardBorder]}>
-          <Text style={s.sectionTitle}>Next 6 Hours</Text>
+          <Text style={s.sectionTitle}>{t('next6Hours')}</Text>
           {precip.length > 0 ? (
             <HourlyRainChart data={precip.slice(0, 6)} />
           ) : (
-            <Text style={s.emptyText}>No data available</Text>
+            <Text style={s.emptyText}>{t('noDataAvailable')}</Text>
           )}
         </View>
 
         {/* ── 7-Day Forecast ── */}
         {outlook.length > 0 && (
           <View style={[s.cardWrapper, s.forecastCardBorder]}>
-            <Text style={s.sectionTitle}>7-Day Forecast</Text>
+            <Text style={s.sectionTitle}>{t('sevenDayForecast')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.forecastScroll}>
               {outlook.map((day, i) => {
                 // Safely parse date for Hermes compatibility (YYYY-MM-DD)
                 const [y, m, d] = day.date.split('-');
                 const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
-                const dayName = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('en-US', { weekday: 'short' }) : day.date.slice(5);
-                const isWeekend = dayName === 'Sat' || dayName === 'Sun';
+                const dayName = !isNaN(dateObj.getTime()) ? localizeDayName(dateObj, lng) : localizeNumber(day.date.slice(5), lng);
+                const isWeekend = dayName === 'Sat' || dayName === 'Sun' || dayName === 'शनि' || dayName === 'रवि' || dayName === 'শনি' || dayName === 'রবি';
 
                 return (
                   <View key={i} style={[s.dayCol, isWeekend && s.dayColActive]}>
@@ -242,8 +251,8 @@ export default function HomeScreen() {
                     <View style={s.dayIcon}>
                       {day.precip_mm > 0 ? <CloudRain size={24} color="#1e293b" /> : <Sun size={24} color="#1e293b" />}
                     </View>
-                    <Text style={s.dayTemp}>{day.temp_max_c?.toFixed(1) ?? '--'}°C</Text>
-                    <Text style={s.dayTempSub}>High/low</Text>
+                    <Text style={s.dayTemp}>{localizeNumber(day.temp_max_c?.toFixed(1) ?? '--', lng)}°C</Text>
+                    <Text style={s.dayTempSub}>{t('highLow')}</Text>
                   </View>
                 );
               })}

@@ -5,6 +5,9 @@ import { useAlerts, useMarket } from '../../src/api/client';
 import { useLocation } from '../../src/context/LocationContext';
 import { LocationPicker } from '../../src/components/LocationPicker';
 import { Search, MapPin, Star, CloudRain, Waves, Leaf, Activity, AlertTriangle } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
+import { localizeNumber, localizeDynamicText } from '../../src/utils/localize';
+import { TranslatedText } from '../../src/components/TranslatedText';
 import Svg, { Rect, Text as SvgText, G } from 'react-native-svg';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -13,6 +16,8 @@ const { width: SCREEN_W } = Dimensions.get('window');
 // Market Horizontal Bar Chart
 // ---------------------------------------------------------------------------
 function MarketBarChart({ data }: { data: any[] }) {
+  const { i18n } = useTranslation();
+  const lng = i18n.language;
   const H = Math.max(300, data.length * 30 + 40);
   const INNER_W = SCREEN_W - 32;
   const PLOT_W = INNER_W - 120; // space for crop names
@@ -43,7 +48,7 @@ function MarketBarChart({ data }: { data: any[] }) {
             <G key={`tick-${i}`}>
               <Rect x={120 + tick * PLOT_W} y={30} width={1} height={H - 55} fill="#f1f5f9" />
               <SvgText x={120 + tick * PLOT_W} y={H - 10} fontSize={10} fill="#64748b" textAnchor="middle">
-                {Math.round(tick * maxPrice)}
+                {localizeNumber(Math.round(tick * maxPrice), lng)}
               </SvgText>
             </G>
           ))}
@@ -58,6 +63,8 @@ function MarketBarChart({ data }: { data: any[] }) {
 // Main Data Screen
 // ---------------------------------------------------------------------------
 export default function DataScreen() {
+  const { t, i18n } = useTranslation();
+  const lng = i18n.language;
   const { data: alerts, isLoading: loadA } = useAlerts();
   const { data: market, isLoading: loadM } = useMarket();
   const { location } = useLocation();
@@ -68,23 +75,23 @@ export default function DataScreen() {
   const mockActions = React.useMemo(() => {
     const locName = location.label.split(',')[0] || 'Ghatal';
     return [
-      { id: '1', action: `Move livestock, seed, and pumps to higher ground near ${locName}; clear local drains; avoid low-lying fields.`, when: 'Before the next heavy pulse' },
-      { id: '2', action: `Do not irrigate in ${locName} for the next 24 hours — heavy rain is likely.`, when: 'Next 24 hours' }
+      { id: '1', action: t('action1', { loc: locName }), when: t('action1When') },
+      { id: '2', action: t('action2', { loc: locName }), when: t('action2When') }
     ];
-  }, [location.label]);
+  }, [location.label, t]);
 
   // Create dynamic mock alerts
   const mockAlerts = React.useMemo(() => {
     const locName = location.label.split(',')[0] || 'Ghatal';
     const seed = location.label.length;
     return {
-      warning: `EXTREME: Extremely heavy rainfall warning — ${locName}.`,
-      flood: `ALERT: River discharge is rising in ${locName}. Open-Meteo GloFAS trend is rising.`,
+      warning: t('extremeWarning', { loc: locName }),
+      flood: t('floodAlert', { loc: locName }),
       aqi: 40 + (seed % 30),
-      marine: `MARINE:\n${((seed % 10) * 0.1).toFixed(1)} m S • ${locName} - 0 km`,
-      quake: `NEAREST QUAKE:\nM${(3 + (seed % 30) / 10).toFixed(1)} • ${100 + seed * 15} km`
+      marine: t('marineAlert', { val: ((seed % 10) * 0.1).toFixed(1), loc: locName }),
+      quake: t('quakeAlert', { val: (3 + (seed % 30) / 10).toFixed(1), dist: 100 + seed * 15 })
     };
-  }, [location.label]);
+  }, [location.label, t]);
 
   // Create a dynamic mock state that reacts to location changes
   const mockMandi = React.useMemo(() => {
@@ -110,7 +117,7 @@ export default function DataScreen() {
     return (
       <View style={s.center}>
         <ActivityIndicator size="large" color="#0ea5e9" />
-        <Text style={s.loadingText}>Loading data…</Text>
+        <Text style={s.loadingText}>{t('loadingLiveData')}</Text>
       </View>
     );
   }
@@ -137,7 +144,7 @@ export default function DataScreen() {
       <View style={s.headerContainer}>
         <TouchableOpacity style={s.searchBar} onPress={() => setIsLocationPickerVisible(true)}>
           <Search size={18} color="#94a3b8" />
-          <Text style={s.searchText}>Search city, town or district...</Text>
+          <Text style={s.searchText}>{t('searchPlaceholder')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -145,12 +152,12 @@ export default function DataScreen() {
         
         {/* ── Actions Section ── */}
         <View style={s.actionsCard}>
-          <Text style={s.sectionTitle}>Actions</Text>
+          <Text style={s.sectionTitle}>{t('actions')}</Text>
           <View style={{ gap: 8 }}>
             {actions.map((act: any, i: number) => (
               <View key={i} style={s.actionItem}>
-                <Text style={s.actionText}>{act.action}</Text>
-                <Text style={s.actionWhen}>{act.when}</Text>
+                <TranslatedText style={s.actionText} text={act.action} locName={location.label} />
+                <TranslatedText style={s.actionWhen} text={act.when} locName={location.label} />
               </View>
             ))}
           </View>
@@ -162,7 +169,7 @@ export default function DataScreen() {
           <View style={[s.alertBox, s.alertBoxRed]}>
             <CloudRain size={24} color="#0f172a" />
             <Text style={s.alertMainText}>{mockAlerts.warning}</Text>
-            <Text style={s.alertSubText}>IMD-CAP • 17 AUG, 02:48 PM</Text>
+            <Text style={s.alertSubText}>IMD-CAP • {localizeNumber(17, lng)} AUG, {localizeNumber('02', lng)}:{localizeNumber(48, lng)} PM</Text>
           </View>
           
           {/* Flood */}
@@ -175,28 +182,28 @@ export default function DataScreen() {
           {/* AQI */}
           <View style={[s.alertBoxSmall, s.alertBoxBlue]}>
             <Leaf size={24} color="#0f172a" />
-            <Text style={s.alertSmallText}>AQI: {mockAlerts.aqi}{'\n'}Satisfactory</Text>
+            <Text style={s.alertSmallText}>AQI: {localizeNumber(mockAlerts.aqi, lng)}{'\n'}{t('satisfactory')}</Text>
             <Text style={s.alertSubText}>CPCB/data.gov.in realtime</Text>
           </View>
           
           {/* Marine */}
           <View style={[s.alertBoxSmall, s.alertBoxBlue]}>
             <Waves size={24} color="#0f172a" />
-            <Text style={s.alertSmallText}>{mockAlerts.marine}</Text>
+            <Text style={s.alertSmallText}>{localizeNumber(mockAlerts.marine, lng)}</Text>
             <Text style={s.alertSubText}>open-meteo-marine</Text>
           </View>
 
           {/* Quake */}
           <View style={[s.alertBoxSmall, s.alertBoxBlue]}>
             <Activity size={24} color="#0f172a" />
-            <Text style={s.alertSmallText}>{mockAlerts.quake}</Text>
+            <Text style={s.alertSmallText}>{localizeNumber(mockAlerts.quake, lng)}</Text>
             <Text style={s.alertSubText}>USGS FDSN</Text>
           </View>
         </View>
 
         {/* ── Market Price Analysis ── */}
         <View style={s.marketHeaderRow}>
-          <Text style={s.marketTitle}>Market Price Analysis</Text>
+          <Text style={s.marketTitle}>{t('marketPriceAnalysis')}</Text>
           <View style={s.locationRow}>
             <MapPin size={16} color="#0369a1" />
             <Text style={s.locationName}>{location.label}</Text>
@@ -205,7 +212,7 @@ export default function DataScreen() {
 
         {/* Market Table */}
         <View style={s.marketCard}>
-          <Text style={s.sectionTitle}>Market</Text>
+          <Text style={s.sectionTitle}>{t('market')}</Text>
           <View style={s.marketSearchRow}>
             <Search size={16} color="#94a3b8" />
             <TextInput 
@@ -218,36 +225,36 @@ export default function DataScreen() {
           </View>
           
           <View style={[s.tableRow, { borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 8, marginTop: 12 }]}>
-            <Text style={[s.th, { flex: 2 }]}>Crop</Text>
-            <Text style={[s.th, { flex: 1.5 }]}>Market</Text>
-            <Text style={[s.th, { flex: 1, textAlign: 'right' }]}>Price (₹)</Text>
+            <Text style={[s.th, { flex: 2 }]}>{t('crop')}</Text>
+            <Text style={[s.th, { flex: 1.5 }]}>{t('market')}</Text>
+            <Text style={[s.th, { flex: 1, textAlign: 'right' }]}>{t('priceRs')}</Text>
           </View>
           
           {filteredMandi.slice(0, 15).map((m: any, i: number) => (
             <View key={i} style={[s.tableRow, { paddingVertical: 10, borderBottomWidth: i === filteredMandi.length - 1 ? 0 : 1, borderBottomColor: '#f1f5f9' }]}>
-              <Text style={[s.td, { flex: 2, color: '#0f172a', fontWeight: '500' }]}>{m.commodity} - {m.variety}</Text>
-              <Text style={[s.td, { flex: 1.5 }]}>{m.market}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'right', color: '#0f172a' }]}>{m.modal_price}</Text>
+              <Text style={[s.td, { flex: 2, color: '#0f172a', fontWeight: '500' }]}>{t(m.commodity)} - {t(m.variety)}</Text>
+              <Text style={[s.td, { flex: 1.5 }]}>{m.market.replace('APMC', t('APMC'))}</Text>
+              <Text style={[s.td, { flex: 1, textAlign: 'right', color: '#0f172a' }]}>{localizeNumber(m.modal_price, lng)}</Text>
             </View>
           ))}
           {filteredMandi.length === 0 && (
-            <Text style={s.emptyText}>No crops found matching "{searchCrop}"</Text>
+            <Text style={s.emptyText}>{t('noCropsFound', { crop: searchCrop })}</Text>
           )}
         </View>
 
         {/* Market Chart */}
         {topMandi.length > 0 && (
           <View style={[s.marketCard, { borderColor: '#22d3ee' }]}>
-            <Text style={s.sectionTitle}>Market</Text>
-            <Text style={s.chartSubTitle}>Market</Text>
+            <Text style={s.sectionTitle}>{t('market')}</Text>
+            <Text style={s.chartSubTitle}>{t('market')}</Text>
             <MarketBarChart data={topMandi} />
           </View>
         )}
         
         {/* Sources */}
         <View style={s.marketCard}>
-          <Text style={s.sectionTitle}>Sources</Text>
-          <Text style={s.actionText}>Open Government Data (OGD) Platform India - realtime mandi prices.</Text>
+          <Text style={s.sectionTitle}>{t('sources')}</Text>
+          <Text style={s.actionText}>{t('ogdSource')}</Text>
         </View>
 
         <View style={{ height: 40 }} />
