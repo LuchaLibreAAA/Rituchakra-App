@@ -128,7 +128,7 @@ rituchakra-mobile/
 │       ├── 📄 maps.tsx         # Geospatial Map View Screen (Leaflet WebView)
 │       ├── 📄 data.tsx         # 7-Day Forecast, ET₀ & Soil Water Balance
 │       └── 📄 chat.tsx         # Multilingual AI Advisor Screen
-├── 📁 src/
+├── 📁 src/                     # Source Code
 │   ├── 📁 api/                 # API Client with Promise.race Fallback Engine
 │   │   └── 📄 client.ts        # TanStack Query hooks & resilient fetch
 │   ├── 📁 components/          # Reusable UI Atoms & Components
