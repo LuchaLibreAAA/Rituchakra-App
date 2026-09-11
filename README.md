@@ -160,7 +160,7 @@ rituchakra-mobile/
 
 ---
 
-## 🚀 Getting Started & Local Development
+## 🚀 Getting Started & Local Setup
 
 ### 1. Clone the Repository
 ```bash
