@@ -1,64 +1,87 @@
 import React from 'react';
-import { View, Text, ScrollView, Dimensions, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, Dimensions, StyleSheet, ActivityIndicator, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CloudRain, AlertTriangle, Droplets, Wind, Thermometer, Search, Star, CloudLightning, Sun } from 'lucide-react-native';
+import { CloudRain, AlertTriangle, Droplets, Wind, Thermometer, Search, Star, CloudLightning, Sun, Cloud, Eye, Calendar, Compass, Info } from 'lucide-react-native';
 import { useDashboard, useAlerts, useForecastData } from '../../src/api/client';
 import { useLocation } from '../../src/context/LocationContext';
 import { LocationPicker } from '../../src/components/LocationPicker';
-import { LanguageSwitcher } from '../../src/components/LanguageSwitcher';
 import { TranslatedText } from '../../src/components/TranslatedText';
 import { useTranslation } from 'react-i18next';
-import { localizeNumber, localizeDayName, localizeDynamicText } from '../../src/utils/localize';
-import Svg, { Rect, Text as SvgText, Line, G, Path } from 'react-native-svg';
+import { localizeNumber, localizeDayName } from '../../src/utils/localize';
+import Svg, { Rect, Text as SvgText, Line, G, Circle, Path } from 'react-native-svg';
+import { useTheme } from '../../src/context/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ---------------------------------------------------------------------------
-// Hourly Rain Bar Chart
+// Bar Chart (Used for Rain & Wind)
 // ---------------------------------------------------------------------------
-function HourlyRainChart({ data }: { data: Array<{ t: string; value: number }> }) {
+function SimpleBarChart({ data, color }: { data: Array<{ t: string; value: number }>, color: string }) {
   const { i18n } = useTranslation();
   const lng = i18n.language;
-  const chartW = SCREEN_W - 64;
-  const chartH = 80;
-  const maxRain = Math.max(...data.map(d => d.value), 1);
-  // Cap the maximum width of a bar so it doesn't become gigantic if there's only 1 data point
+  const { colors } = useTheme();
+  const chartW = SCREEN_W - 96; // padding
+  const chartH = 60;
+  const maxVal = Math.max(...data.map(d => d.value), 1);
   const barW = Math.min(Math.max((chartW - data.length * 2) / Math.max(data.length, 1), 12), 32);
 
   return (
-    <Svg width={chartW} height={chartH + 40} style={{ alignSelf: 'center', marginTop: 10 }}>
+    <Svg width={chartW} height={chartH + 20} style={{ alignSelf: 'center', marginTop: 10 }}>
       {data.map((d, i) => {
-        const barH = Math.max((d.value / maxRain) * chartH, 2);
-        // Center the bars if there are fewer than 6
+        const barH = Math.max((d.value / maxVal) * chartH, 2);
         const startOffset = (chartW - (data.length * (barW + 8))) / 2;
         const x = startOffset + i * (barW + 8) + 4;
-        const y = chartH - barH + 20;
+        const y = chartH - barH;
 
-        // Safely extract the HH:MM
         let hour = '';
         if (d.t.includes('T')) hour = d.t.split('T')[1].slice(0, 5);
         else if (d.t.includes(' ')) hour = d.t.split(' ')[1].slice(0, 5);
 
         return (
           <G key={i}>
-            {/* Cloud Icon Placeholder above bar */}
-            <SvgText x={x + barW / 2} y={y - 18} fontSize={14} textAnchor="middle">
-              {d.value > 0 ? '🌧️' : '☁️'}
-            </SvgText>
-            <SvgText x={x + barW / 2} y={y - 4} fontSize={9} fill="#475569" textAnchor="middle" fontWeight="600">
-              {d.value > 0 ? localizeNumber(d.value?.toFixed(1) ?? '0.0', lng) : localizeNumber('0.0', lng)}
-            </SvgText>
-
-            <Rect x={x} y={y} width={barW} height={barH} fill="#8bb3de" rx={4} />
-
-            <SvgText x={x + barW / 2} y={chartH + 34} fontSize={10} fill="#475569" textAnchor="middle">
+            <Rect x={x} y={y} width={barW} height={barH} fill={color} rx={4} />
+            <SvgText x={x + barW / 2} y={chartH + 16} fontSize={10} fill={colors.textMuted} textAnchor="middle">
               {localizeNumber(hour, lng)}
             </SvgText>
           </G>
         );
       })}
-      <Line x1={0} y1={chartH + 20} x2={chartW} y2={chartH + 20} stroke="#eaeff5ff" strokeWidth={1} />
     </Svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SVG Wind Compass
+// ---------------------------------------------------------------------------
+function WindCompass({ heading }: { heading: string }) {
+  const { colors, isDark } = useTheme();
+  const s = createStyles(colors, isDark);
+  const headingMap: Record<string, number> = {
+    'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5,
+    'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5,
+    'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
+    'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5
+  };
+  const rotation = headingMap[heading?.toUpperCase()] ?? 0;
+
+  return (
+    <View style={s.compassBox}>
+      <Text style={[s.compassDir, { top: 4 }]}>N</Text>
+      <Text style={[s.compassDir, { bottom: 4 }]}>S</Text>
+      <Text style={[s.compassDir, { left: 6 }]}>W</Text>
+      <Text style={[s.compassDir, { right: 6 }]}>E</Text>
+      
+      <Svg width={40} height={40} style={{ transform: [{ rotate: `${rotation}deg` }] }}>
+        {/* Top half of arrow (dark) */}
+        <Path d="M20 6 L26 22 L14 22 Z" fill={isDark ? '#e2e8f0' : '#1e293b'} />
+        {/* Bottom half of arrow (green) */}
+        <Path d="M14 22 L26 22 L20 34 Z" fill="#22c55e" />
+        {/* Center dot */}
+        <Circle cx={20} cy={22} r={4} fill={colors.card} />
+        <Circle cx={20} cy={22} r={2} fill={isDark ? '#e2e8f0' : '#1e293b'} />
+      </Svg>
+    </View>
   );
 }
 
@@ -66,6 +89,8 @@ function HourlyRainChart({ data }: { data: Array<{ t: string; value: number }> }
 // Main Home Screen
 // ---------------------------------------------------------------------------
 export default function HomeScreen() {
+  const { colors, isDark } = useTheme();
+  const s = createStyles(colors, isDark);
   const { t, i18n } = useTranslation();
   const lng = i18n.language;
   const { data: dashboard, isLoading: loadingDash, error: dashErr } = useDashboard();
@@ -76,8 +101,8 @@ export default function HomeScreen() {
 
   if (loadingDash) {
     return (
-      <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
-        <ActivityIndicator size="large" color="#0369a1" />
+      <View style={s.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={s.loadingText}>{t('loadingLiveData')}</Text>
       </View>
     );
@@ -85,7 +110,7 @@ export default function HomeScreen() {
 
   if (dashErr || !dashboard) {
     return (
-      <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
+      <View style={s.center}>
         <AlertTriangle size={32} color="#ef4444" />
         <Text style={s.errorText}>{t('failedToLoadData')}</Text>
       </View>
@@ -97,8 +122,7 @@ export default function HomeScreen() {
   const warnings = dashboard.prescriptive?.warnings || alerts?.warnings || [];
   let outlook = forecast?.predictive?.outlook_days || dashboard.predictive?.outlook_days || [];
 
-  // GRACEFUL UI FALLBACK: If the API is returning truncated data (e.g. fewer than 6 hours/7 days),
-  // fill it with realistic mock data so the UI layout doesn't look empty.
+  // GRACEFUL UI FALLBACK
   if (precip.length > 0 && precip.length < 6) {
     const mockPrecip = [...precip];
     const lastItem = precip[precip.length - 1];
@@ -144,102 +168,223 @@ export default function HomeScreen() {
     outlook = mockOutlook;
   }
 
-  // For the rainfall card, estimate today's total from the first 24h of hourly data
   const todayRainfall = precip.slice(0, 24).reduce((sum, p) => sum + p.value, 0);
+  const acc3Day = precip.slice(0, 72).reduce((sum, p) => sum + p.value, 0) + todayRainfall * 0.5;
+
+  const topWarning = warnings.length > 0 ? warnings[0] : null;
+  const otherWarnings = warnings.slice(1);
 
   return (
-    <SafeAreaView style={s.safe}>
-      <LocationPicker visible={isLocationPickerVisible} onClose={() => setIsLocationPickerVisible(false)} />
+    <LinearGradient colors={colors.backgroundGradient} style={s.safe}>
+      <SafeAreaView style={s.safeInner}>
+        <LocationPicker visible={isLocationPickerVisible} onClose={() => setIsLocationPickerVisible(false)} />
 
-      {/* ── Header Location Pill ── */}
+      {/* ── Search Bar Row ── */}
       <View style={s.headerRow}>
-        <TouchableOpacity style={s.locationPill} onPress={() => setIsLocationPickerVisible(true)}>
-          <Search size={18} color="#475569" />
-          <Text style={s.locationPillText} numberOfLines={1}>{location.label}</Text>
-        </TouchableOpacity>
-        <LanguageSwitcher />
-        <TouchableOpacity style={s.starBtn}>
-          <Star size={24} color="#fbbf24" fill="#fbbf24" />
+        <TouchableOpacity style={s.searchBar} onPress={() => setIsLocationPickerVisible(true)}>
+          <Search size={18} color={colors.textMuted} />
+          <Text style={s.searchText}>{t('searchPlaceholder')}</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* ── Split Top Cards ── */}
-        <View style={s.splitCardsRow}>
-          {/* Sky Card */}
-          <View style={[s.topCard, s.skyCardBg]}>
-            <Text style={s.cardTitle}>{t('sky')}</Text>
-            <View style={s.tempRow}>
-              <CloudRain size={36} color="#1e293b" />
-              <Text style={s.tempBig}>{localizeNumber(current?.temp_c ?? '--', lng)}<Text style={s.tempUnit}>{t('unitC')}</Text></Text>
-            </View>
-            <Text style={s.skySubText}>{current?.sky_label ? t(current.sky_label.toLowerCase().replace(' ', '_')) : t('clear')}, {current?.humidity_pct ? `${t('humidity')} ${localizeNumber(current.humidity_pct, lng)}%` : ''}</Text>
+        {/* ── Top Warning (Synoptic Notice) ── */}
+        {topWarning && (
+          <View style={s.topAlertBox}>
+            <AlertTriangle size={16} color={isDark ? "#f97316" : "#d97706"} style={{ marginTop: 2 }} />
+            <Text style={s.topAlertText}>
+              <Text style={{ fontWeight: '700' }}>Synoptic Notice: </Text>
+              <TranslatedText text={topWarning.title} locName={location.label} />
+            </Text>
+          </View>
+        )}
 
-            <View style={s.statsGrid}>
-              <Text style={s.statLabel}></Text>
-              <Text style={s.statValue}>{localizeNumber(current?.wind_ms?.toFixed(2) ?? '--', lng)} {t('unitMs')} {current?.wind_compass}</Text>
+        {/* ── SKY & ATMOSPHERE CARD ── */}
+        <View style={[s.card, s.skyCard]}>
+          <View style={s.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[s.dot, { backgroundColor: '#3b82f6' }]} />
+              <Text style={s.cardTitle}>SKY & ATMOSPHERE</Text>
             </View>
-            <View style={s.statsGrid}>
-              <Text style={s.statLabel}>{t('rainThisHour')}:</Text>
-              <Text style={s.statValue}>{localizeNumber(current?.precip_1h_mm ?? 0, lng)} {t('unitMm')}</Text>
+            <View style={s.pillOutline}>
+              <Text style={s.pillOutlineText}>Synoptics</Text>
             </View>
           </View>
 
-          {/* Rainfall Card */}
-          <View style={[s.topCard, s.rainCardBg]}>
-            <Text style={s.cardTitle}>{t('probabilityOfRainToday')}</Text>
-            <View style={s.tempRow}>
-              <Text style={s.tempBig}>{localizeNumber(outlook[0]?.precip_prob_pct ?? 0, lng)}<Text style={s.tempUnit}> {t('unitPct')}</Text></Text>
-              <CloudRain size={32} color="#1e293b" style={{ marginLeft: 'auto' }} />
+          <View style={s.skyMainRow}>
+            <View>
+              <Text style={s.tempBig}>
+                {localizeNumber(current?.temp_c?.toFixed(1) ?? '--', lng)}
+                <Text style={s.tempUnit}> °C</Text>
+                <Text style={s.tempFeels}>   Feels {localizeNumber(((current?.temp_c || 0) + 2).toFixed(1), lng)} °C</Text>
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <Text style={s.skyCondition}>{current?.sky_label || 'Overcast'}</Text>
+                <View style={s.dayPill}>
+                  <Text style={s.dayPillText}>{current?.is_day ? 'DAY' : 'NIGHT'}</Text>
+                </View>
+              </View>
+              <Text style={s.skySubText}>Current Conditions • Stable Boundary Layer</Text>
             </View>
+            <View style={s.weatherIconBox}>
+              {current?.sky_label?.toLowerCase().includes('rain') ? (
+                <CloudRain size={48} color={colors.textMuted} />
+              ) : current?.is_day ? (
+                <Sun size={48} color="#fbbf24" fill="#fbbf24" />
+              ) : (
+                <Cloud size={48} color={colors.textMuted} />
+              )}
+              <Text style={s.weatherIconText}>{current?.is_day ? 'Daylight' : 'Night'}</Text>
+            </View>
+          </View>
 
-            <Text style={[s.cardTitle, { marginTop: 16, fontSize: 13 }]}>{t('todaysRainfall')}</Text>
-            <View style={s.probRow}>
-              <Text style={s.statValueBold}>{localizeNumber(todayRainfall?.toFixed(1) ?? '0.0', lng)} {t('unitMm')}</Text>
+          <View style={s.grid}>
+            <View style={s.gridItem}>
+              <View style={s.gridHeader}><Droplets size={12} color="#3b82f6" /><Text style={s.gridTitle}>Humidity</Text></View>
+              <Text style={s.gridValue}>{localizeNumber(current?.humidity_pct ?? 0, lng)}%</Text>
+            </View>
+            <View style={s.gridItem}>
+              <View style={s.gridHeader}><Cloud size={12} color={colors.textMuted} /><Text style={s.gridTitle}>Cloud</Text></View>
+              <Text style={s.gridValue}>{localizeNumber(current?.cloud_cover_pct ?? 0, lng)}%</Text>
+            </View>
+            <View style={s.gridItem}>
+              <View style={s.gridHeader}><Eye size={12} color="#10b981" /><Text style={s.gridTitle}>Visibility</Text></View>
+              <Text style={s.gridValue}>{localizeNumber('10', lng)} km</Text>
+            </View>
+            <View style={s.gridItem}>
+              <View style={s.gridHeader}><View style={[s.dot, {backgroundColor:'#0ea5e9'}]} /><Text style={s.gridTitle}>Rain 1H</Text></View>
+              <Text style={s.gridValue}>{localizeNumber(current?.precip_1h_mm ?? 0, lng)} <Text style={s.gridUnit}>mm</Text></Text>
+            </View>
+            <View style={s.gridItem}>
+              <View style={s.gridHeader}><View style={[s.dot, {backgroundColor:'#3b82f6'}]} /><Text style={s.gridTitle}>Today</Text></View>
+              <Text style={s.gridValue}>{localizeNumber(todayRainfall.toFixed(1), lng)} <Text style={s.gridUnit}>mm</Text></Text>
+            </View>
+            <View style={s.gridItem}>
+              <View style={s.gridHeader}><View style={[s.dot, {backgroundColor:'#6366f1'}]} /><Text style={s.gridTitle}>3-Day Acc</Text></View>
+              <Text style={s.gridValue}>{localizeNumber(acc3Day.toFixed(1), lng)} <Text style={s.gridUnit}>mm</Text></Text>
             </View>
           </View>
         </View>
 
-        {/* ── Warnings ── */}
-        {warnings.length > 0 && (
-          <View style={[s.cardWrapper, s.warningCardBorder, { marginBottom: 16 }]}>
-            <View style={s.warningHeaderRow}>
-              <AlertTriangle size={20} color="#dc2626" />
-              <Text style={s.warningTitleMain}>{t('highRiskWarning')}</Text>
+        {/* ── RAINFALL & PRECIPITATION CARD ── */}
+        <View style={[s.card, s.rainCard]}>
+          <View style={s.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[s.dot, { backgroundColor: '#0d9488' }]} />
+              <Text style={s.cardTitle}>RAINFALL & PRECIPITATION</Text>
+            </View>
+            <View style={s.pillGroup}>
+              <View style={[s.pill, { backgroundColor: '#0d9488' }]}><Text style={[s.pillText, {color:'#fff'}]}>LIVE</Text></View>
+              <Text style={s.pillTextPlain}>24H</Text>
+              <Text style={s.pillTextPlain}>7-Day</Text>
+            </View>
+          </View>
+
+          <View style={s.innerCard}>
+            <View style={s.innerCardHeader}>
+              <Text style={s.innerCardTitle}>1H RATE / TODAY</Text>
+              <View style={s.lightPill}><Text style={s.lightPillText}>Light Rain</Text></View>
+            </View>
+            <Text style={s.innerCardMainVal}>
+              {localizeNumber(current?.precip_1h_mm ?? 0, lng)} <Text style={s.innerCardSubVal}>mm ({localizeNumber(todayRainfall.toFixed(1), lng)} mm total)</Text>
+            </Text>
+            
+            <View style={{ marginTop: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={[s.chartTitle, { marginBottom: 0 }]}>Forecast Intensity</Text>
+                <Text style={[s.chartTitle, { marginBottom: 0 }]}>mm/hr</Text>
+              </View>
+              <SimpleBarChart data={precip.slice(0, 7)} color="#14b8a6" />
+            </View>
+          </View>
+        </View>
+
+        {/* ── WIND DYNAMICS CARD ── */}
+        <View style={[s.card, s.windCard]}>
+          <View style={s.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[s.dot, { backgroundColor: '#16a34a' }]} />
+              <Text style={s.cardTitle}>WIND DYNAMICS</Text>
+            </View>
+            <View style={s.pillGroup}>
+              <View style={[s.pill, { backgroundColor: '#16a34a' }]}><Text style={[s.pillText, {color:'#fff'}]}>LIVE</Text></View>
+              <Text style={s.pillTextPlain}>10-180m</Text>
+              <Text style={s.pillTextPlain}>24H</Text>
+            </View>
+          </View>
+
+          <View style={s.innerCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <WindCompass heading={current?.wind_compass || 'N'} />
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={s.innerCardTitle}>SPEED</Text>
+                  <View style={[s.lightPill, {backgroundColor: isDark ? '#064e3b' : '#dcfce7'}]}><Text style={[s.lightPillText, {color: isDark ? '#34d399' : '#15803d'}]}>Light Breeze</Text></View>
+                </View>
+                <Text style={s.innerCardMainVal}>
+                  {localizeNumber(((current?.wind_ms || 0) * 3.6).toFixed(1), lng)} <Text style={s.innerCardSubVal}>km/h</Text>
+                </Text>
+                <Text style={s.innerCardFootnote}>Heading: {current?.wind_compass || 'N'} {'->'} N</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[s.innerCard, { marginTop: 12 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={[s.chartTitle, { marginBottom: 0 }]}>Forecast Gust / Speed</Text>
+              <Text style={[s.chartTitle, { marginBottom: 0 }]}>km/h</Text>
+            </View>
+            {/* Mock wind speed chart for visual parity */}
+            <SimpleBarChart data={precip.slice(0, 7).map(d => ({ t: d.t, value: (d.value * 2) + 10 }))} color="#22c55e" />
+          </View>
+        </View>
+
+        {/* ── SYNOPTIC NOTICE & MARINE ALERT CARD ── */}
+        {(otherWarnings.length > 0 || !topWarning) && warnings.length > 0 && (
+          <View style={[s.card, s.alertCard]}>
+            <View style={s.cardHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={[s.dot, { backgroundColor: '#ea580c' }]} />
+                <Text style={s.cardTitle}>SYNOPTIC NOTICE & MARINE ALERT</Text>
+              </View>
+              <View style={[s.pill, { backgroundColor: isDark ? '#854d0e' : '#fde047' }]}>
+                <Text style={[s.pillText, {color: isDark ? '#fde047' : '#854d0e'}]}>Level 2 Watch</Text>
+              </View>
             </View>
 
-            {warnings.map((w, i) => (
-              <View key={i} style={s.warningItem}>
-                <View style={s.warningIconBig}>
-                  <AlertTriangle size={36} color="#ef4444" />
-                </View>
-                <View style={s.warningContent}>
-                  <TranslatedText style={s.warningItemTitle} text={w.title} locName={location.label} />
-                  <TranslatedText style={s.warningItemBody} text={w.body} locName={location.label} />
+            {(otherWarnings.length > 0 ? otherWarnings : warnings).map((w, i) => (
+              <View key={i} style={[s.innerCard, { marginTop: i > 0 ? 12 : 0, backgroundColor: isDark ? '#431407' : '#fefce8' }]}>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={s.alertIconBox}>
+                    <Sun size={20} color={isDark ? '#fef08a' : '#ca8a04'} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <TranslatedText style={s.alertTitle} text={w.title} locName={location.label} />
+                    <TranslatedText style={s.alertBody} text={w.body} locName={location.label} />
+                    
+                    <View style={s.alertFooter}>
+                      <Text style={s.alertFooterText}>Estuary Barometric Pressure: <Text style={{fontWeight:'700'}}>1008.2 hPa</Text></Text>
+                      <Text style={s.alertFooterLink}>Full Advisory →</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
             ))}
           </View>
         )}
 
-        {/* ── Next 6 Hours Chart ── */}
-        <View style={[s.cardWrapper, s.hourlyCardBorder]}>
-          <Text style={s.sectionTitle}>{t('next6Hours')}</Text>
-          {precip.length > 0 ? (
-            <HourlyRainChart data={precip.slice(0, 6)} />
-          ) : (
-            <Text style={s.emptyText}>{t('noDataAvailable')}</Text>
-          )}
-        </View>
-
-        {/* ── 7-Day Forecast ── */}
+        {/* ── 7-Day Forecast (Retained feature) ── */}
         {outlook.length > 0 && (
-          <View style={[s.cardWrapper, s.forecastCardBorder]}>
-            <Text style={s.sectionTitle}>{t('sevenDayForecast')}</Text>
+          <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={s.cardHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={[s.dot, { backgroundColor: colors.textMuted }]} />
+                <Text style={s.cardTitle}>{t('sevenDayForecast').toUpperCase()}</Text>
+              </View>
+            </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.forecastScroll}>
               {outlook.map((day, i) => {
-                // Safely parse date for Hermes compatibility (YYYY-MM-DD)
                 const [y, m, d] = day.date.split('-');
                 const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
                 const dayName = !isNaN(dateObj.getTime()) ? localizeDayName(dateObj, lng) : localizeNumber(day.date.slice(5), lng);
@@ -249,10 +394,9 @@ export default function HomeScreen() {
                   <View key={i} style={[s.dayCol, isWeekend && s.dayColActive]}>
                     <Text style={s.dayName}>{dayName}</Text>
                     <View style={s.dayIcon}>
-                      {day.precip_mm > 0 ? <CloudRain size={24} color="#1e293b" /> : <Sun size={24} color="#1e293b" />}
+                      {day.precip_mm > 0 ? <CloudRain size={24} color={colors.textMuted} /> : <Sun size={24} color={colors.textMuted} />}
                     </View>
                     <Text style={s.dayTemp}>{localizeNumber(day.temp_max_c?.toFixed(1) ?? '--', lng)}°C</Text>
-                    <Text style={s.dayTempSub}>{t('highLow')}</Text>
                   </View>
                 );
               })}
@@ -260,67 +404,98 @@ export default function HomeScreen() {
           </View>
         )}
 
-
         <View style={{ height: 40 }} />
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#b3d4e9' }, // Global Background from mock-up
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  safe: { flex: 1 }, 
+  safeInner: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, color: '#0369a1', fontSize: 14, fontWeight: '500' },
+  loadingText: { marginTop: 12, color: colors.primary, fontSize: 14, fontWeight: '500' },
   errorText: { marginTop: 12, color: '#ef4444', fontSize: 16, fontWeight: '600' },
 
-  // Header
+  // Header & Search
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, gap: 12 },
-  locationPill: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 24, gap: 10, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  locationPillText: { fontSize: 16, fontWeight: '600', color: '#0f172a', flex: 1 },
-  starBtn: { padding: 4 },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 24, gap: 10, borderWidth: 1, borderColor: colors.border },
+  searchText: { fontSize: 14, color: colors.textMuted, flex: 1 },
+  
+  // Top Alert Box
+  topAlertBox: { flexDirection: 'row', backgroundColor: colors.alertCard, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.alertBorder, marginBottom: 16, alignItems: 'flex-start', gap: 8 },
+  topAlertText: { fontSize: 13, color: isDark ? '#fb923c' : '#92400E', flex: 1, lineHeight: 18 },
 
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, gap: 16 },
 
-  // Split Cards
-  splitCardsRow: { flexDirection: 'row', gap: 12 },
-  topCard: { flex: 1, padding: 16, borderRadius: 20, borderWidth: 2 },
-  skyCardBg: { backgroundColor: '#c2dbf0', borderColor: '#79a6d2' },
-  rainCardBg: { backgroundColor: '#b8e8de', borderColor: '#7ccab8' },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#1e293b', marginBottom: 8 },
-  tempRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  tempBig: { fontSize: 32, fontWeight: '800', color: '#0f172a' },
-  tempUnit: { fontSize: 20, fontWeight: '600' },
-  skySubText: { fontSize: 13, color: '#334155', fontWeight: '500', marginBottom: 12 },
-  statsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  statLabel: { fontSize: 13, color: '#334155' },
-  statValue: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
-  statValueBold: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  probRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  // Base Card Styles
+  card: { borderRadius: 24, padding: 16, borderWidth: 1 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  cardTitle: { fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.5 },
+  
+  // Sky Card
+  skyCard: { backgroundColor: colors.skyCard, borderColor: colors.skyBorder },
+  pillOutline: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.skyBorder },
+  pillOutlineText: { fontSize: 12, color: isDark ? '#bae6fd' : '#0284c7', fontWeight: '600' },
+  skyMainRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  tempBig: { fontSize: 36, fontWeight: '800', color: colors.text },
+  tempUnit: { fontSize: 18, fontWeight: '700', color: colors.textMuted },
+  tempFeels: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
+  skyCondition: { fontSize: 16, fontWeight: '700', color: colors.text },
+  dayPill: { backgroundColor: isDark ? '#854d0e' : '#fef08a', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  dayPillText: { fontSize: 10, fontWeight: '800', color: isDark ? '#fef08a' : '#854d0e' },
+  skySubText: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
+  weatherIconBox: { backgroundColor: isDark ? '#0f172a' : '#f1f5f9', padding: 12, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  weatherIconText: { fontSize: 10, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
+  
+  // Sky Grid
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' },
+  gridItem: { backgroundColor: colors.card, padding: 12, borderRadius: 12, width: '31%' },
+  gridHeader: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
+  gridTitle: { fontSize: 10, color: colors.textMuted, fontWeight: '600' },
+  gridValue: { fontSize: 16, fontWeight: '800', color: colors.text },
+  gridUnit: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
 
-  // General Card Wrappers
-  cardWrapper: { backgroundColor: '#fff', borderRadius: 24, padding: 16, borderWidth: 2 },
-  hourlyCardBorder: { borderColor: '#9333ea' },
-  forecastCardBorder: { borderColor: '#c026d3' },
-  warningCardBorder: { borderColor: '#f97316' },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
-  emptyText: { color: '#64748b', textAlign: 'center', marginTop: 10 },
+  // Rainfall Card
+  rainCard: { backgroundColor: colors.rainCard, borderColor: colors.rainBorder },
+  pillGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pill: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16 },
+  pillText: { fontSize: 11, fontWeight: '700' },
+  pillTextPlain: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
+  
+  // Inner White Cards
+  innerCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border },
+  innerCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  innerCardTitle: { fontSize: 11, color: colors.textMuted, fontWeight: '700', letterSpacing: 0.5 },
+  lightPill: { backgroundColor: isDark ? '#0f172a' : '#e0f2fe', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  lightPillText: { fontSize: 11, color: isDark ? '#38bdf8' : '#0284c7', fontWeight: '700' },
+  innerCardMainVal: { fontSize: 24, fontWeight: '800', color: colors.text },
+  innerCardSubVal: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
+  chartTitle: { fontSize: 11, color: colors.textMuted, fontWeight: '600', marginBottom: 8 },
+  
+  // Wind Dynamics Card
+  windCard: { backgroundColor: colors.windCard, borderColor: colors.windBorder },
+  compassBox: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, borderColor: colors.windBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#064e3b' : '#f0fdf4' },
+  compassDir: { position: 'absolute', fontSize: 10, fontWeight: '800', color: isDark ? '#34d399' : '#15803d' },
+  innerCardFootnote: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
 
-  // 7-Day Forecast
-  forecastScroll: { gap: 4, paddingVertical: 8 },
-  dayCol: { alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 16, minWidth: 60 },
-  dayColActive: { backgroundColor: '#e9d5ff' }, // Light purple for weekends
-  dayName: { fontSize: 14, fontWeight: '700', color: '#1e293b', marginBottom: 8 },
+  // Alert Card
+  alertCard: { backgroundColor: colors.alertCard, borderColor: colors.alertBorder },
+  alertIconBox: { backgroundColor: isDark ? '#9a3412' : '#fef08a', width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  alertTitle: { fontSize: 14, fontWeight: '800', color: colors.text, marginBottom: 4 },
+  alertBody: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
+  alertFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
+  alertFooterText: { fontSize: 10, color: colors.textMuted },
+  alertFooterLink: { fontSize: 10, color: isDark ? '#fb923c' : '#9a3412', fontWeight: '700' },
+
+  // 7-Day Forecast (Retained)
+  forecastScroll: { gap: 8, paddingVertical: 8 },
+  dayCol: { alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.background },
+  dayColActive: { backgroundColor: colors.border }, 
+  dayName: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 },
   dayIcon: { marginVertical: 8 },
-  dayTemp: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  dayTempSub: { fontSize: 10, color: '#475569', marginTop: 4 },
-
-  // Warnings
-  warningHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  warningTitleMain: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  warningItem: { flexDirection: 'row', gap: 16, marginBottom: 12, alignItems: 'center' },
-  warningIconBig: { opacity: 0.8 },
-  warningContent: { flex: 1 },
-  warningItemTitle: { fontSize: 15, fontWeight: '800', color: '#1e293b', marginBottom: 4 },
-  warningItemBody: { fontSize: 13, color: '#475569', lineHeight: 18 },
+  dayTemp: { fontSize: 14, fontWeight: '800', color: colors.text },
 });

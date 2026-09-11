@@ -1,19 +1,20 @@
 import { Tabs } from 'expo-router';
-import { Home, LineChart, Map, Database, MessageSquare } from 'lucide-react-native';
+import { Home, LineChart, Map, Database, MessageSquare, Settings } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { tokens } from '../../src/theme/tokens';
+import { useTheme } from '../../src/context/ThemeContext';
 
 export default function TabLayout() {
   const { t } = useTranslation();
+  const { colors } = useTheme();
 
   return (
     <Tabs screenOptions={{ 
-      tabBarActiveTintColor: tokens.colors.primary,
-      tabBarInactiveTintColor: tokens.colors.text.secondary,
+      tabBarActiveTintColor: colors.primary,
+      tabBarInactiveTintColor: colors.textMuted,
       tabBarStyle: {
-        backgroundColor: tokens.colors.card,
+        backgroundColor: colors.card,
         borderTopWidth: 1,
-        borderTopColor: tokens.colors.borders.default,
+        borderTopColor: colors.border,
       }
     }}>
       <Tabs.Screen
@@ -54,6 +55,14 @@ export default function TabLayout() {
           title: t('chat'),
           headerShown: false,
           tabBarIcon: ({ color }) => <MessageSquare color={color} size={24} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <Settings color={color} size={24} />,
         }}
       />
     </Tabs>

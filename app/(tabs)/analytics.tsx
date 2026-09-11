@@ -8,6 +8,8 @@ import { Search, MapPin, Star, AlertTriangle } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { localizeNumber } from '../../src/utils/localize';
 import Svg, { Rect, Line, Polyline, Circle, Text as SvgText, G } from 'react-native-svg';
+import { useTheme } from '../../src/context/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -18,15 +20,15 @@ const INNER_W = (SCREEN_W - 36) / 2 - 24;
 const X_OFF = 25;
 const PLOT_W = INNER_W - X_OFF - 5;
 
-function YAxis({ ticks, H, max }: { ticks: number[], H: number, max: number }) {
+function YAxis({ ticks, H, max, colors }: { ticks: number[], H: number, max: number, colors: any }) {
   return (
     <G>
       {ticks.map((t, i) => {
         const y = H - (t / max) * H;
         return (
           <G key={i}>
-            <SvgText x={X_OFF - 5} y={y + 4} fontSize={9} fill="#64748b" textAnchor="end">{t}</SvgText>
-            <Line x1={X_OFF} y1={y} x2={INNER_W} y2={y} stroke="#e2e8f0" strokeWidth={1} />
+            <SvgText x={X_OFF - 5} y={y + 4} fontSize={9} fill={colors.textMuted} textAnchor="end">{t}</SvgText>
+            <Line x1={X_OFF} y1={y} x2={INNER_W} y2={y} stroke={colors.border} strokeWidth={1} />
           </G>
         );
       })}
@@ -34,13 +36,13 @@ function YAxis({ ticks, H, max }: { ticks: number[], H: number, max: number }) {
   );
 }
 
-function XAxis({ dates, H }: { dates: string[], H: number }) {
+function XAxis({ dates, H, colors }: { dates: string[], H: number, colors: any }) {
   const step = PLOT_W / (dates.length || 1);
   return (
     <G>
-      <Line x1={X_OFF} y1={H} x2={INNER_W} y2={H} stroke="#94a3b8" strokeWidth={1} />
+      <Line x1={X_OFF} y1={H} x2={INNER_W} y2={H} stroke={colors.textMuted} strokeWidth={1} />
       {dates.map((d, i) => (
-        <SvgText key={i} x={X_OFF + i * step + step / 2} y={H + 12} fontSize={7.5} fill="#64748b" textAnchor="middle">
+        <SvgText key={i} x={X_OFF + i * step + step / 2} y={H + 12} fontSize={7.5} fill={colors.textMuted} textAnchor="middle">
           {d.slice(-2)}
         </SvgText>
       ))}
@@ -51,7 +53,7 @@ function XAxis({ dates, H }: { dates: string[], H: number }) {
 // ---------------------------------------------------------------------------
 // Chart 1: RAIN / ET0
 // ---------------------------------------------------------------------------
-function RainEt0Chart({ data }: { data: any[] }) {
+function RainEt0Chart({ data, colors }: { data: any[], colors: any }) {
   const dates = data.map(d => d.date.slice(5));
   const maxVal = 60;
   const H = 100;
@@ -60,8 +62,8 @@ function RainEt0Chart({ data }: { data: any[] }) {
 
   return (
     <Svg width={INNER_W} height={H + 40}>
-      <YAxis ticks={[0, 15, 30, 45, 60]} H={H} max={maxVal} />
-      <XAxis dates={dates} H={H} />
+      <YAxis ticks={[0, 15, 30, 45, 60]} H={H} max={maxVal} colors={colors} />
+      <XAxis dates={dates} H={H} colors={colors} />
 
       {data.map((d, i) => {
         const x = X_OFF + i * step + 2;
@@ -69,7 +71,7 @@ function RainEt0Chart({ data }: { data: any[] }) {
         const et0H = Math.min((d.et0_mm / maxVal) * H, H);
         return (
           <G key={i}>
-            <Rect x={x} y={H - rainH} width={barW} height={rainH} fill="#2563eb" rx={1} />
+            <Rect x={x} y={H - rainH} width={barW} height={rainH} fill={colors.primary} rx={1} />
             <Rect x={x + barW + 1} y={H - et0H} width={barW} height={et0H} fill="#0d9488" rx={1} />
           </G>
         );
@@ -77,10 +79,10 @@ function RainEt0Chart({ data }: { data: any[] }) {
 
       {/* Legend */}
       <G x={INNER_W / 2 - 25} y={H + 25}>
-        <Rect x={0} y={0} width={8} height={8} fill="#2563eb" />
-        <SvgText x={12} y={8} fontSize={10} fill="#334155">rain</SvgText>
+        <Rect x={0} y={0} width={8} height={8} fill={colors.primary} />
+        <SvgText x={12} y={8} fontSize={10} fill={colors.textMuted}>rain</SvgText>
         <Rect x={35} y={0} width={8} height={8} fill="#0d9488" />
-        <SvgText x={47} y={8} fontSize={10} fill="#334155">eT0</SvgText>
+        <SvgText x={47} y={8} fontSize={10} fill={colors.textMuted}>eT0</SvgText>
       </G>
     </Svg>
   );
@@ -89,7 +91,7 @@ function RainEt0Chart({ data }: { data: any[] }) {
 // ---------------------------------------------------------------------------
 // Chart 2: Temperature (°C)
 // ---------------------------------------------------------------------------
-function TempChart({ data }: { data: any[] }) {
+function TempChart({ data, colors }: { data: any[], colors: any }) {
   const dates = data.map(d => d.date.slice(5));
   const maxVal = 36;
   const H = 100;
@@ -100,18 +102,18 @@ function TempChart({ data }: { data: any[] }) {
 
   return (
     <Svg width={INNER_W} height={H + 40}>
-      <YAxis ticks={[0, 7, 18, 27, 36]} H={H} max={maxVal} />
-      <XAxis dates={dates} H={H} />
+      <YAxis ticks={[0, 7, 18, 27, 36]} H={H} max={maxVal} colors={colors} />
+      <XAxis dates={dates} H={H} colors={colors} />
 
       <Polyline points={maxPoints} fill="none" stroke="#b45309" strokeWidth={2} />
-      <Polyline points={minPoints} fill="none" stroke="#1e3a8a" strokeWidth={2} />
+      <Polyline points={minPoints} fill="none" stroke={colors.primary} strokeWidth={2} />
 
       {/* Legend */}
       <G x={INNER_W / 2 - 25} y={H + 25}>
         <Line x1={0} y1={4} x2={10} y2={4} stroke="#b45309" strokeWidth={2} />
-        <SvgText x={14} y={8} fontSize={10} fill="#334155">max</SvgText>
-        <Line x1={35} y1={4} x2={45} y2={4} stroke="#1e3a8a" strokeWidth={2} />
-        <SvgText x={49} y={8} fontSize={10} fill="#334155">min</SvgText>
+        <SvgText x={14} y={8} fontSize={10} fill={colors.textMuted}>max</SvgText>
+        <Line x1={35} y1={4} x2={45} y2={4} stroke={colors.primary} strokeWidth={2} />
+        <SvgText x={49} y={8} fontSize={10} fill={colors.textMuted}>min</SvgText>
       </G>
     </Svg>
   );
@@ -120,7 +122,7 @@ function TempChart({ data }: { data: any[] }) {
 // ---------------------------------------------------------------------------
 // Chart 3: SOIL + PROBABILITY
 // ---------------------------------------------------------------------------
-function SoilProbChart({ data }: { data: any[] }) {
+function SoilProbChart({ data, colors }: { data: any[], colors: any }) {
   const dates = data.map(d => d.date.slice(5));
   const maxVal = 100;
   const H = 100;
@@ -131,17 +133,17 @@ function SoilProbChart({ data }: { data: any[] }) {
 
   return (
     <Svg width={INNER_W} height={H + 20}>
-      <YAxis ticks={[0, 25, 50, 75, 100]} H={H} max={maxVal} />
-      <XAxis dates={dates} H={H} />
+      <YAxis ticks={[0, 25, 50, 75, 100]} H={H} max={maxVal} colors={colors} />
+      <XAxis dates={dates} H={H} colors={colors} />
 
       <Polyline points={soilPoints} fill="none" stroke="#3b82f6" strokeWidth={2} />
       {data.map((d, i) => (
-        <Circle key={`s-${i}`} cx={X_OFF + i * step} cy={H - ((d.soil_m3m3 * 100) / maxVal) * H} r={2.5} fill="#fff" stroke="#3b82f6" strokeWidth={1.5} />
+        <Circle key={`s-${i}`} cx={X_OFF + i * step} cy={H - ((d.soil_m3m3 * 100) / maxVal) * H} r={2.5} fill={colors.card} stroke="#3b82f6" strokeWidth={1.5} />
       ))}
 
-      <Polyline points={probPoints} fill="none" stroke="#1e3a8a" strokeWidth={2} />
+      <Polyline points={probPoints} fill="none" stroke={colors.primary} strokeWidth={2} />
       {data.map((d, i) => (
-        <Circle key={`p-${i}`} cx={X_OFF + i * step} cy={H - (d.precip_prob_pct / maxVal) * H} r={2} fill="#1e3a8a" />
+        <Circle key={`p-${i}`} cx={X_OFF + i * step} cy={H - (d.precip_prob_pct / maxVal) * H} r={2} fill={colors.primary} />
       ))}
     </Svg>
   );
@@ -150,7 +152,7 @@ function SoilProbChart({ data }: { data: any[] }) {
 // ---------------------------------------------------------------------------
 // Chart 4: HOURLY (Actually plotting daily soil moisture based on mockup axis)
 // ---------------------------------------------------------------------------
-function HourlyChart({ data }: { data: any[] }) {
+function HourlyChart({ data, colors }: { data: any[], colors: any }) {
   const dates = data.map(d => d.date.slice(5));
   const maxVal = 0.6;
   const H = 100;
@@ -159,14 +161,14 @@ function HourlyChart({ data }: { data: any[] }) {
 
   return (
     <Svg width={INNER_W} height={H + 20}>
-      <YAxis ticks={[0, 0.2, 0.4, 0.6]} H={H} max={maxVal} />
-      <XAxis dates={dates} H={H} />
+      <YAxis ticks={[0, 0.2, 0.4, 0.6]} H={H} max={maxVal} colors={colors} />
+      <XAxis dates={dates} H={H} colors={colors} />
 
       {data.map((d, i) => {
         const val = Math.min((d.soil_m3m3 / maxVal) * H, H);
         const x = X_OFF + i * step + 2;
         return (
-          <Rect key={i} x={x} y={H - val} width={barW} height={val} fill="#2563eb" rx={1} />
+          <Rect key={i} x={x} y={H - val} width={barW} height={val} fill={colors.primary} rx={1} />
         );
       })}
     </Svg>
@@ -179,6 +181,8 @@ function HourlyChart({ data }: { data: any[] }) {
 export default function AnalyticsScreen() {
   const { t, i18n } = useTranslation();
   const lng = i18n.language;
+  const { colors, isDark } = useTheme();
+  const s = createStyles(colors, isDark);
   const { data: forecast, isLoading: loadF, error: errF } = useForecastData();
   const { data: dashboard, isLoading: loadD } = useDashboard();
   const { location } = useLocation();
@@ -186,8 +190,8 @@ export default function AnalyticsScreen() {
 
   if (loadF || loadD) {
     return (
-      <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
-        <ActivityIndicator size="large" color="#0ea5e9" />
+      <View style={s.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={s.loadingText}>{t('loadingLiveData')}</Text>
       </View>
     );
@@ -195,7 +199,7 @@ export default function AnalyticsScreen() {
 
   if (errF) {
     return (
-      <View style={[s.center, { backgroundColor: '#b3d4e9' }]}>
+      <View style={s.center}>
         <AlertTriangle size={32} color="#ef4444" />
         <Text style={s.errorText}>{t('failedToLoadData')}</Text>
       </View>
@@ -234,8 +238,9 @@ export default function AnalyticsScreen() {
   const predictive = forecast?.predictive || dashboard?.predictive;
 
   return (
-    <SafeAreaView style={s.safe}>
-      <LocationPicker visible={isLocationPickerVisible} onClose={() => setIsLocationPickerVisible(false)} />
+    <LinearGradient colors={colors.backgroundGradient} style={s.safe}>
+      <SafeAreaView style={s.safeInner}>
+        <LocationPicker visible={isLocationPickerVisible} onClose={() => setIsLocationPickerVisible(false)} />
 
       {/* ── Mockup Header ── */}
       <View style={s.headerContainer}>
@@ -243,9 +248,9 @@ export default function AnalyticsScreen() {
           <Text style={s.searchText}>{t('searchPlaceholder')}</Text>
         </TouchableOpacity>
         <View style={s.locationRow}>
-          <MapPin size={18} color="#1e3a8a" />
+          <MapPin size={18} color={colors.primary} />
           <Text style={s.locationName}>{location.label}</Text>
-          <Star size={16} color="#94a3b8" fill="#94a3b8" />
+          <Star size={16} color={colors.textMuted} fill={colors.textMuted} />
         </View>
       </View>
 
@@ -267,7 +272,7 @@ export default function AnalyticsScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ minWidth: 500, paddingBottom: 8 }}>
               {/* Table Header */}
-              <View style={[s.tableRow, { borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 8 }]}>
+              <View style={[s.tableRow, { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 8 }]}>
                 <Text style={[s.th, { flex: 1.5 }]}>{t('date')}</Text>
                 <Text style={s.th}>{t('rainMm')}</Text>
                 <Text style={s.th}>{t('probPct')}</Text>
@@ -279,8 +284,8 @@ export default function AnalyticsScreen() {
 
               {/* Table Rows */}
               {outlook.map((day, i) => (
-                <View key={i} style={[s.tableRow, { paddingVertical: 10, borderBottomWidth: i === outlook.length - 1 ? 0 : 1, borderBottomColor: '#f1f5f9' }]}>
-                  <Text style={[s.td, { flex: 1.5, fontWeight: '600', color: '#1e293b' }]}>{localizeNumber(day.date, lng)}</Text>
+                <View key={i} style={[s.tableRow, { paddingVertical: 10, borderBottomWidth: i === outlook.length - 1 ? 0 : 1, borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}>
+                  <Text style={[s.td, { flex: 1.5, fontWeight: '600', color: colors.text }]}>{localizeNumber(day.date, lng)}</Text>
                   <Text style={s.td}>{localizeNumber(day.precip_mm?.toFixed(1) ?? '--', lng)} {t('unitMm')}</Text>
                   <Text style={s.td}>{localizeNumber(day.precip_prob_pct, lng)}{t('unitPct')}</Text>
                   <Text style={s.td}>{localizeNumber(day.temp_max_c?.toFixed(1) ?? '--', lng)} {t('unitC')}</Text>
@@ -305,60 +310,62 @@ export default function AnalyticsScreen() {
           <View style={s.gridContainer}>
             <View style={s.gridItem}>
               <Text style={s.chartTitle}>{t('rainEt0')}</Text>
-              <RainEt0Chart data={outlook} />
+              <RainEt0Chart data={outlook} colors={colors} />
             </View>
             <View style={s.gridItem}>
               <Text style={s.chartTitle}>{t('celsius')}</Text>
-              <TempChart data={outlook} />
+              <TempChart data={outlook} colors={colors} />
             </View>
             <View style={s.gridItem}>
               <Text style={s.chartTitle}>{t('soilProbability')}</Text>
-              <SoilProbChart data={outlook} />
+              <SoilProbChart data={outlook} colors={colors} />
             </View>
             <View style={s.gridItem}>
               <Text style={s.chartTitle}>{t('hourly')}</Text>
-              <HourlyChart data={outlook} />
+              <HourlyChart data={outlook} colors={colors} />
             </View>
           </View>
         )}
 
         <View style={{ height: 40 }} />
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#b3d4e9' },
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  safe: { flex: 1 },
+  safeInner: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, color: '#0ea5e9', fontSize: 14, fontWeight: '500' },
+  loadingText: { marginTop: 12, color: colors.primary, fontSize: 14, fontWeight: '500' },
   errorText: { marginTop: 12, color: '#ef4444', fontSize: 16, fontWeight: '600' },
 
   // Header
   headerContainer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
-  searchBar: { backgroundColor: '#e2e8f0', borderRadius: 24, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 12, opacity: 0.8 },
-  searchText: { color: '#64748b', fontSize: 15, fontWeight: '500' },
+  searchBar: { backgroundColor: colors.card, borderRadius: 24, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 12, opacity: 0.8 },
+  searchText: { color: colors.textMuted, fontSize: 15, fontWeight: '500' },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
-  locationName: { fontSize: 18, fontWeight: '600', color: '#0f172a' },
+  locationName: { fontSize: 18, fontWeight: '600', color: colors.text },
 
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 12, gap: 16 },
 
   // Table Card
-  tableCard: { backgroundColor: '#fff', borderRadius: 24, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  tableCard: { backgroundColor: colors.card, borderRadius: 24, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
   pillRow: { flexDirection: 'row', gap: 8, paddingRight: 16 },
-  pill: { backgroundColor: '#eef2f6', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 },
-  pillText: { fontSize: 10, fontWeight: '700', color: '#475569' },
+  pill: { backgroundColor: isDark ? '#1e293b' : '#eef2f6', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 },
+  pillText: { fontSize: 10, fontWeight: '700', color: colors.textMuted },
 
   tableRow: { flexDirection: 'row', alignItems: 'center' },
-  th: { flex: 1, fontSize: 10, fontWeight: '700', color: '#0f172a' },
-  td: { flex: 1, fontSize: 11, color: '#334155', fontWeight: '500' },
-  floodTag: { backgroundColor: '#fecdd3', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, marginLeft: 4, position: 'absolute', right: -5 },
-  floodTagText: { color: '#be123c', fontSize: 8, fontWeight: '700' },
+  th: { flex: 1, fontSize: 10, fontWeight: '700', color: colors.text },
+  td: { flex: 1, fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  floodTag: { backgroundColor: isDark ? '#7f1d1d' : '#fecdd3', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, marginLeft: 4, position: 'absolute', right: -5 },
+  floodTagText: { color: isDark ? '#fecaca' : '#be123c', fontSize: 8, fontWeight: '700' },
 
   // Grid
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
-  gridItem: { backgroundColor: '#fff', borderColor: '#7dd3fc', borderWidth: 1.5, borderRadius: 20, padding: 12, width: (SCREEN_W - 36) / 2, elevation: 1 },
-  chartTitle: { fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 8 },
+  gridItem: { backgroundColor: colors.card, borderColor: colors.skyBorder, borderWidth: 1.5, borderRadius: 20, padding: 12, width: (SCREEN_W - 36) / 2, elevation: 1 },
+  chartTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 },
 });

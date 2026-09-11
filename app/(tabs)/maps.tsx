@@ -1,20 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
+import WebView from 'react-native-webview';
 import { Layers, X, MapPin } from 'lucide-react-native';
 import { useLocation } from '../../src/context/LocationContext';
 import { useMapLayers, useMapRadar } from '../../src/api/client';
 import { MapLayer } from '../../src/types';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../src/context/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function MapsScreen() {
   const { t } = useTranslation();
   const { location } = useLocation();
+  const { colors, isDark } = useTheme();
+  const s = createStyles(colors, isDark);
   const { data: layersData } = useMapLayers();
   const { data: radarData } = useMapRadar();
 
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<any>(null);
   const [layersMenuVisible, setLayersMenuVisible] = useState(false);
   
   const [selectedBasemap, setSelectedBasemap] = useState<MapLayer | null>(null);
@@ -138,7 +142,7 @@ export default function MapsScreen() {
   `;
 
   return (
-    <View style={s.container}>
+    <LinearGradient colors={colors.backgroundGradient} style={s.container}>
       <WebView 
         ref={webViewRef}
         originWhitelist={['*']}
@@ -153,7 +157,7 @@ export default function MapsScreen() {
       <SafeAreaView style={s.safeOverlay} pointerEvents="box-none">
         <View style={s.topBar} pointerEvents="none">
           <View style={s.locationPill}>
-            <MapPin size={16} color="#0f172a" />
+            <MapPin size={16} color={colors.text} />
             <Text style={s.locationText}>{location.label}</Text>
           </View>
         </View>
@@ -169,7 +173,7 @@ export default function MapsScreen() {
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{t('mapLayers')}</Text>
               <TouchableOpacity onPress={() => setLayersMenuVisible(false)} style={s.closeBtn}>
-                <X color="#475569" size={24} />
+                <X color={colors.textMuted} size={24} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -236,26 +240,26 @@ export default function MapsScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#b3d4e9' },
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  container: { flex: 1 },
   safeOverlay: { flex: 1, justifyContent: 'space-between', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   topBar: { padding: 16, alignItems: 'center' },
-  locationPill: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, alignItems: 'center', gap: 6, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  locationText: { fontWeight: '700', color: '#0f172a' },
-  fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: '#0369a1', padding: 16, borderRadius: 32, elevation: 6, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  locationPill: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.9)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, alignItems: 'center', gap: 6, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  locationText: { fontWeight: '700', color: colors.text },
+  fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: colors.primary, padding: 16, borderRadius: 32, elevation: 6, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#f8fafc', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%', elevation: 20, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: -4 } },
+  modalContent: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%', elevation: 20, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: -4 } },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
   closeBtn: { padding: 4 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#334155', marginTop: 16, marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.textMuted, marginTop: 16, marginBottom: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  layerBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  layerBtnActive: { backgroundColor: '#e0f2fe', borderColor: '#0284c7' },
-  layerTxt: { fontSize: 13, fontWeight: '600', color: '#475569' },
-  layerTxtActive: { color: '#0369a1' },
+  layerBtn: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  layerBtnActive: { backgroundColor: isDark ? '#0c4a6e' : '#e0f2fe', borderColor: isDark ? '#0284c7' : '#0284c7' },
+  layerTxt: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  layerTxtActive: { color: colors.primary },
 });

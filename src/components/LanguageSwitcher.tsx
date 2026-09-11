@@ -1,10 +1,11 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useLanguage } from '../context/LanguageContext';
-import { tokens } from '../theme/tokens';
+import { useTheme } from '../context/ThemeContext';
 
 export function LanguageSwitcher() {
   const { currentLanguage, changeLanguage } = useLanguage();
+  const { colors } = useTheme();
 
   const handleToggle = () => {
     if (currentLanguage === 'en') changeLanguage('hi');
@@ -20,8 +21,8 @@ export function LanguageSwitcher() {
   };
 
   return (
-    <TouchableOpacity style={styles.button} onPress={handleToggle}>
-      <Text style={styles.text}>{getLabel()}</Text>
+    <TouchableOpacity style={[styles.button, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleToggle}>
+      <Text style={[styles.text, { color: colors.text }]}>{getLabel()}</Text>
     </TouchableOpacity>
   );
 }
@@ -30,17 +31,14 @@ const styles = StyleSheet.create({
   button: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: tokens.colors.background.secondary,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: tokens.colors.borders.default,
     marginLeft: 8,
   },
   text: {
     fontSize: 14,
     fontWeight: '600',
-    color: tokens.colors.text.primary,
   }
 });
