@@ -1,7 +1,7 @@
 <div align="center">
 
 # 🌾 𝗥𝗜𝗧𝗨𝗖𝗛𝗔𝗞𝗥𝗔 (ऋतुचक्र / ঋতুচক্র) 🌦️
-### *Hyperlocal Precision Agro-Meteorological & Climate Intelligence Mobile Platform*
+### *Hyperlocal Precision Agro-Meteorological & Climate Intelligence Mobile App*
 
 [![React Native](https://img.shields.io/badge/React_Native-0.74.5-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
 [![Expo](https://img.shields.io/badge/Expo-SDK_51-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
